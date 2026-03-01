@@ -35,6 +35,7 @@ class TransactionsPane(Widget):
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("left", "prev_month", "Previous month", show=False, priority=True),
         Binding("right", "next_month", "Next month", show=False, priority=True),
+        Binding("t", "today_month", "Today", show=False, priority=True),
     ]
 
     def __init__(self, journal_file: Path, **kwargs) -> None:
@@ -97,6 +98,10 @@ class TransactionsPane(Widget):
     def action_next_month(self) -> None:
         """Navigate to the next month."""
         self._table.next_month()
+
+    def action_today_month(self) -> None:
+        """Jump to the current month."""
+        self._table.today_month()
 
     def action_add(self) -> None:
         """Open the form to add a new transaction."""

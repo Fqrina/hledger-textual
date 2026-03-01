@@ -39,6 +39,7 @@ class BudgetPane(Widget):
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("left,h", "prev_month", "Prev month", show=False, priority=True),
         Binding("right,l", "next_month", "Next month", show=False, priority=True),
+        Binding("t", "today_month", "Today", show=False, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
     ]
@@ -293,6 +294,11 @@ class BudgetPane(Widget):
             month = 1
             year += 1
         self._current_month = self._current_month.replace(year=year, month=month)
+        self._load_budget_data()
+
+    def action_today_month(self) -> None:
+        """Jump to the current month."""
+        self._current_month = date.today().replace(day=1)
         self._load_budget_data()
 
     def action_cursor_down(self) -> None:

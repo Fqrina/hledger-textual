@@ -336,6 +336,51 @@ class TestBudgetMonthNavigation:
             assert pane._current_month.year == 2026
 
 
+class TestBudgetTodayMonth:
+    """Tests for the 't' (today month) keybinding in BudgetPane."""
+
+    async def test_today_resets_to_current_month(self, budget_app: HledgerTuiApp):
+        """Pressing 't' after navigating away returns to the current month."""
+        from hledger_textual.widgets.budget_pane import BudgetPane
+
+        async with budget_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("3")
+            await pilot.pause(delay=1.0)
+            pane = budget_app.screen.query_one(BudgetPane)
+
+            # Navigate to previous month
+            await pilot.press("h")
+            await pilot.pause(delay=1.0)
+            assert pane._current_month < date.today().replace(day=1)
+
+            # Press 't' to jump back to today
+            await pilot.press("t")
+            await pilot.pause(delay=1.0)
+            assert pane._current_month == date.today().replace(day=1)
+
+    async def test_today_updates_period_label(self, budget_app: HledgerTuiApp):
+        """Pressing 't' updates the period label to the current month name."""
+        from textual.widgets import Static
+
+        async with budget_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("3")
+            await pilot.pause(delay=1.0)
+
+            # Navigate away
+            await pilot.press("h")
+            await pilot.pause(delay=1.0)
+
+            # Press 't' to jump back
+            await pilot.press("t")
+            await pilot.pause(delay=1.0)
+
+            label = budget_app.screen.query_one("#period-label", Static)
+            expected = date.today().replace(day=1).strftime("%B %Y")
+            assert str(label.renderable) == expected
+
+
 class TestBudgetRefresh:
     """Tests for the refresh action in BudgetPane."""
 

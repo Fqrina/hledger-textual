@@ -106,6 +106,14 @@ class TransactionsTable(Widget):
         self._load_transactions()
         self.post_message(self.MonthChanged(self._current_month))
 
+    def today_month(self) -> None:
+        """Jump to the current calendar month and reload."""
+        self._current_month = date.today().replace(day=1)
+        self._date_query = self._month_query()
+        self._update_period_label()
+        self._load_transactions()
+        self.post_message(self.MonthChanged(self._current_month))
+
     # ------------------------------------------------------------------
     # Composition
     # ------------------------------------------------------------------

@@ -80,8 +80,10 @@ class PeriodSummaryCards(Widget):
             if summary.investments > 0:
                 inv_text = fmt_amount(summary.investments, com)
                 note.update(f"incl. {inv_text} invested")
+                note.display = True
             else:
                 note.update("")
+                note.display = False
 
             rate_widget = self.query_one(".saving-rate", Static)
             rate = compute_saving_rate(summary.income, summary.expenses)
@@ -92,5 +94,7 @@ class PeriodSummaryCards(Widget):
         else:
             for cls in (".income-value", ".expenses-value", ".net-value"):
                 self.query_one(cls, Digits).update("--")
-            self.query_one(".net-note", Static).update("")
+            note = self.query_one(".net-note", Static)
+            note.update("")
+            note.display = False
             self.query_one(".saving-rate", Static).update("")
