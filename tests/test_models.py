@@ -6,6 +6,7 @@ from hledger_textual.models import (
     Amount,
     AmountStyle,
     BudgetRow,
+    PeriodSummary,
     Posting,
     Transaction,
     TransactionStatus,
@@ -183,3 +184,123 @@ class TestBudgetRow:
     def test_usage_pct_zero_budget(self):
         row = BudgetRow(account="Expenses:Food", actual=Decimal("100"), budget=Decimal("0"), commodity="€")
         assert row.usage_pct == 0.0
+
+
+class TestPeriodSummary:
+    """Tests for PeriodSummary properties."""
+
+    def test_net_without_investments(self):
+        """Net equals income minus expenses when investments is zero."""
+        summary = PeriodSummary(
+            income=Decimal("3000"), expenses=Decimal("1000"), commodity="€"
+        )
+        assert summary.net == Decimal("2000")
+
+    def test_net_with_investments(self):
+        """Net deducts investments: income - expenses - investments."""
+        summary = PeriodSummary(
+            income=Decimal("3000"),
+            expenses=Decimal("1000"),
+            commodity="€",
+            investments=Decimal("600"),
+        )
+        assert summary.net == Decimal("1400")
+
+    def test_net_negative(self):
+        """Net can be negative when expenses + investments exceed income."""
+        summary = PeriodSummary(
+            income=Decimal("1000"),
+            expenses=Decimal("800"),
+            commodity="€",
+            investments=Decimal("500"),
+        )
+        assert summary.net == Decimal("-300")
+
+
+class TestTotalAmountWithCost:
+    """Tests for Transaction.total_amount when postings carry cost annotations."""
+
+    def test_cost_is_included_in_total(self):
+        """The EUR cost is included in total_amount alongside the commodity qty."""
+        eur_style = AmountStyle(commodity_side="L", commodity_spaced=False, precision=2)
+        etf_style = AmountStyle(commodity_side="R", commodity_spaced=True, precision=0)
+        cost_amount = Amount(commodity="€", quantity=Decimal("600"), style=eur_style)
+        txn = Transaction(
+            index=1,
+            date="2026-01-15",
+            description="Buy ETF",
+            postings=[
+                Posting(
+                    account="assets:investments:XDWD",
+                    amounts=[
+                        Amount(
+                            commodity="XDWD",
+                            quantity=Decimal("5"),
+                            style=etf_style,
+                            cost=cost_amount,
+                        )
+                    ],
+                ),
+                Posting(
+                    account="assets:bank",
+                    amounts=[
+                        Amount(
+                            commodity="€",
+                            quantity=Decimal("-600"),
+                            style=eur_style,
+                        )
+                    ],
+                ),
+            ],
+        )
+        total = txn.total_amount
+        # Should contain both the XDWD quantity and the EUR cost
+        assert "XDWD" in total
+        assert "€" in total
+
+    def test_cost_aggregates_with_same_commodity(self):
+        """When cost commodity matches existing amounts, quantities are summed."""
+        eur_style = AmountStyle(commodity_side="L", commodity_spaced=False, precision=2)
+        etf_style = AmountStyle(commodity_side="R", commodity_spaced=True, precision=0)
+        cost_amount = Amount(commodity="€", quantity=Decimal("600"), style=eur_style)
+        txn = Transaction(
+            index=1,
+            date="2026-01-15",
+            description="Buy ETF",
+            postings=[
+                Posting(
+                    account="assets:investments:XDWD",
+                    amounts=[
+                        Amount(
+                            commodity="XDWD",
+                            quantity=Decimal("5"),
+                            style=etf_style,
+                            cost=cost_amount,
+                        )
+                    ],
+                ),
+                Posting(
+                    account="expenses:fees",
+                    amounts=[
+                        Amount(
+                            commodity="€",
+                            quantity=Decimal("2.50"),
+                            style=eur_style,
+                        )
+                    ],
+                ),
+                Posting(
+                    account="assets:bank",
+                    amounts=[
+                        Amount(
+                            commodity="€",
+                            quantity=Decimal("-602.50"),
+                            style=eur_style,
+                        )
+                    ],
+                ),
+            ],
+        )
+        total = txn.total_amount
+        # €2.50 (fee) + €600 (cost) = €602.50
+        assert "€602.50" in total

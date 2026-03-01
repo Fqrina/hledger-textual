@@ -11,12 +11,14 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Digits, Static
 
+from hledger_textual.widgets.formatting import (
+    compute_saving_rate,
+    fmt_amount,
+    fmt_digits,
+)
 from hledger_textual.widgets.summary_pane import (
     SummaryPane,
-    _fmt_amount,
-    _fmt_digits,
     _progress_bar,
-    compute_saving_rate,
 )
 from tests.conftest import has_hledger
 
@@ -68,39 +70,39 @@ def empty_summary_journal(tmp_path: Path) -> Path:
 
 
 class TestFmtAmount:
-    """Tests for _fmt_amount helper."""
+    """Tests for fmt_amount helper."""
 
     def test_left_symbol(self):
         """Left-side single-char commodity is prepended."""
-        assert _fmt_amount(Decimal("1234.56"), "€") == "€1,234.56"
+        assert fmt_amount(Decimal("1234.56"), "€") == "€1,234.56"
 
     def test_right_code(self):
         """Multi-char commodity codes are appended with a space."""
-        assert _fmt_amount(Decimal("500.00"), "EUR") == "500.00 EUR"
+        assert fmt_amount(Decimal("500.00"), "EUR") == "500.00 EUR"
 
     def test_no_commodity(self):
         """Without a commodity, only the number is returned."""
-        assert _fmt_amount(Decimal("42.00"), "") == "42.00"
+        assert fmt_amount(Decimal("42.00"), "") == "42.00"
 
 
 class TestFmtDigits:
-    """Tests for _fmt_digits helper (Digits-compatible formatting)."""
+    """Tests for fmt_digits helper (Digits-compatible formatting)."""
 
     def test_removes_commas(self):
         """Commas are removed for Digits widget compatibility."""
-        assert _fmt_digits(Decimal("1234.56"), "€") == "€1234.56"
+        assert fmt_digits(Decimal("1234.56"), "€") == "€1234.56"
 
     def test_no_comma_passthrough(self):
         """Small amounts without commas pass through unchanged."""
-        assert _fmt_digits(Decimal("42.00"), "€") == "€42.00"
+        assert fmt_digits(Decimal("42.00"), "€") == "€42.00"
 
     def test_right_code(self):
         """Multi-char commodity codes work correctly."""
-        assert _fmt_digits(Decimal("1000.00"), "EUR") == "1000.00 EUR"
+        assert fmt_digits(Decimal("1000.00"), "EUR") == "1000.00 EUR"
 
     def test_no_commodity(self):
         """Without a commodity, only the number is returned."""
-        assert _fmt_digits(Decimal("1234.00"), "") == "1234.00"
+        assert fmt_digits(Decimal("1234.00"), "") == "1234.00"
 
 
 class TestProgressBar:
@@ -287,7 +289,7 @@ class TestSummaryPaneCards:
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
-            income_widget = app.query_one("#card-income-value", Digits)
+            income_widget = app.query_one(".income-value", Digits)
             assert "3000" in income_widget.value
 
     async def test_cards_show_expenses_after_load(self, summary_journal: Path):
@@ -295,7 +297,7 @@ class TestSummaryPaneCards:
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
-            expenses_widget = app.query_one("#card-expenses-value", Digits)
+            expenses_widget = app.query_one(".expenses-value", Digits)
             assert "40" in expenses_widget.value
 
     async def test_empty_journal_shows_zeros(self, empty_summary_journal: Path):
@@ -304,9 +306,9 @@ class TestSummaryPaneCards:
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
             for widget_id in (
-                "#card-income-value",
-                "#card-expenses-value",
-                "#card-net-value",
+                ".income-value",
+                ".expenses-value",
+                ".net-value",
             ):
                 widget = app.query_one(widget_id, Digits)
                 assert "0.00" in widget.value
@@ -327,9 +329,9 @@ class TestSummaryPaneCards:
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
             for widget_id in (
-                "#card-income-value",
-                "#card-expenses-value",
-                "#card-net-value",
+                ".income-value",
+                ".expenses-value",
+                ".net-value",
             ):
                 widget = app.query_one(widget_id, Digits)
                 assert widget.value == "--"
@@ -339,7 +341,7 @@ class TestSummaryPaneCards:
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
-            rate_widget = app.query_one("#card-saving-rate", Static)
+            rate_widget = app.query_one(".saving-rate", Static)
             assert "Saving rate:" in rate_widget.renderable
             assert "99%" in rate_widget.renderable
 
@@ -358,8 +360,30 @@ class TestSummaryPaneCards:
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
-            rate_widget = app.query_one("#card-saving-rate", Static)
+            rate_widget = app.query_one(".saving-rate", Static)
             assert rate_widget.renderable == ""
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestSummaryPaneDynamicTitles:
+    """Tests for dynamic month-name section titles."""
+
+    async def test_overview_title(self, summary_journal: Path):
+        """The overview title is the static string 'Overview'."""
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            title = app.query_one("#summary-overview-title", Static)
+            assert str(title.renderable) == "Overview"
+
+    async def test_breakdown_title_contains_month(self, summary_journal: Path):
+        """The breakdown title includes the current month name."""
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            title = app.query_one("#summary-breakdown-title", Static)
+            month_name = date.today().strftime("%B %Y")
+            assert month_name in str(title.renderable)
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -373,6 +397,43 @@ class TestSummaryPaneBreakdown:
             await pilot.pause(delay=1.0)
             table = app.query_one("#summary-breakdown-table", DataTable)
             assert table.row_count > 0
+
+    async def test_empty_breakdown_shows_message(self, empty_summary_journal: Path):
+        """An empty journal shows a 'no expenses' message row."""
+        app = _SummaryApp(empty_summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            table = app.query_one("#summary-breakdown-table", DataTable)
+            assert table.row_count == 1
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestSummaryPaneIncomeBreakdown:
+    """Tests for the income breakdown table."""
+
+    async def test_income_table_exists(self, summary_journal: Path):
+        """The income breakdown DataTable is present in the widget tree."""
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            table = app.query_one("#summary-income-table")
+            assert table is not None
+
+    async def test_income_breakdown_shows_accounts(self, summary_journal: Path):
+        """After loading, the income table has at least one row."""
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            table = app.query_one("#summary-income-table", DataTable)
+            assert table.row_count > 0
+
+    async def test_empty_income_shows_message(self, empty_summary_journal: Path):
+        """An empty journal shows a 'no income' message row."""
+        app = _SummaryApp(empty_summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            table = app.query_one("#summary-income-table", DataTable)
+            assert table.row_count == 1
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")

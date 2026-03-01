@@ -11,9 +11,12 @@ from hledger_textual.hledger import (
     _parse_budget_amount,
     _parse_report_csv,
     expand_search_query,
+    get_hledger_version,
+    load_account_balances,
     load_accounts,
     load_descriptions,
     load_expense_breakdown,
+    load_income_breakdown,
     load_investment_cost,
     load_investment_eur_by_account,
     load_investment_positions,
@@ -668,3 +671,113 @@ class TestLoadInvestmentReport:
         load_investment_report(journal)
         assert "bal" in captured_args
         assert "assets:investments" in captured_args
+
+
+# ------------------------------------------------------------------
+# Tests for get_hledger_version (monkeypatched, no hledger needed)
+# ------------------------------------------------------------------
+
+
+class TestGetHledgerVersion:
+    """Tests for get_hledger_version."""
+
+    def test_strips_program_prefix(self, monkeypatch):
+        """The 'hledger ' prefix is stripped from the version string."""
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: "hledger 1.40.1, linux-x86_64\n",
+        )
+        assert get_hledger_version() == "1.40.1, linux-x86_64"
+
+    def test_returns_raw_when_no_prefix(self, monkeypatch):
+        """When output has no 'hledger ' prefix, the raw string is returned."""
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: "1.40.1\n",
+        )
+        assert get_hledger_version() == "1.40.1"
+
+    def test_returns_question_mark_on_error(self, monkeypatch):
+        """Returns '?' when hledger is not available."""
+        def _raise(*args, **kwargs):
+            raise HledgerError("not found")
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _raise)
+        assert get_hledger_version() == "?"
+
+
+# ------------------------------------------------------------------
+# Tests for load_account_balances (require hledger)
+# ------------------------------------------------------------------
+
+
+class TestLoadAccountBalances:
+    """Tests for load_account_balances."""
+
+    def test_returns_account_balance_pairs(self, sample_journal_path: Path):
+        """All accounts with balances are returned as (account, balance) tuples."""
+        balances = load_account_balances(sample_journal_path)
+        accounts = [row[0] for row in balances]
+        assert "assets:bank:checking" in accounts
+
+    def test_balances_are_non_empty_strings(self, sample_journal_path: Path):
+        """Each balance value is a non-empty string."""
+        balances = load_account_balances(sample_journal_path)
+        assert all(bal for _, bal in balances)
+
+    def test_empty_journal_returns_empty(self, tmp_path: Path):
+        """An empty journal produces no balances."""
+        journal = tmp_path / "empty.journal"
+        journal.write_text("")
+        balances = load_account_balances(journal)
+        assert balances == []
+
+
+# ------------------------------------------------------------------
+# Tests for load_income_breakdown (require hledger)
+# ------------------------------------------------------------------
+
+
+class TestLoadIncomeBreakdown:
+    """Tests for load_income_breakdown."""
+
+    @pytest.fixture
+    def income_journal(self, tmp_path: Path) -> Path:
+        """Create a journal with two income sources in the current month."""
+        today = date.today()
+        d1 = today.replace(day=1)
+        d2 = today.replace(day=2)
+        content = (
+            f"{d1.isoformat()} Salary\n"
+            f"    assets:bank  €3000.00\n"
+            f"    income:salary\n"
+            f"\n"
+            f"{d2.isoformat()} Freelance\n"
+            f"    assets:bank  €500.00\n"
+            f"    income:freelance\n"
+        )
+        journal = tmp_path / "income.journal"
+        journal.write_text(content)
+        return journal
+
+    def test_returns_income_accounts(self, income_journal: Path):
+        """Both income accounts should be returned."""
+        period = date.today().strftime("%Y-%m")
+        breakdown = load_income_breakdown(income_journal, period)
+        accounts = [row[0] for row in breakdown]
+        assert "income:salary" in accounts
+        assert "income:freelance" in accounts
+
+    def test_sorted_by_amount_descending(self, income_journal: Path):
+        """Results should be sorted by amount descending."""
+        period = date.today().strftime("%Y-%m")
+        breakdown = load_income_breakdown(income_journal, period)
+        assert len(breakdown) == 2
+        assert breakdown[0][1] >= breakdown[1][1]
+        assert breakdown[0][0] == "income:salary"
+        assert breakdown[0][1] == Decimal("3000.00")
+
+    def test_empty_period_returns_empty(self, income_journal: Path):
+        """A period with no transactions should return an empty list."""
+        breakdown = load_income_breakdown(income_journal, "1999-01")
+        assert breakdown == []

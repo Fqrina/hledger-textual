@@ -460,7 +460,7 @@ def load_journal_stats(file: str | Path) -> JournalStats:
     )
 
 
-def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
+def load_period_summary(file: str | Path, period: str | None = None) -> PeriodSummary:
     """Load income, expense, and investment totals for a single period.
 
     Two separate queries are used: one for income/expenses (unmodified) and
@@ -471,6 +471,8 @@ def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
     Args:
         file: Path to the journal file.
         period: A period string like ``'2026-02'`` for hledger's ``-p`` flag.
+            When ``None``, all transactions across the entire journal are
+            included (no ``-p`` flag is passed).
 
     Returns:
         A :class:`PeriodSummary` instance.
@@ -478,10 +480,12 @@ def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
     Raises:
         HledgerError: If hledger fails or is not found.
     """
+    period_args = ("-p", period) if period else ()
+
     # Query 1: income and expenses (no -B, keeps original amounts)
     output = run_hledger(
         "balance", "income", "expenses",
-        "-p", period, "--flat", "--no-total", "-O", "csv",
+        *period_args, "--flat", "--no-total", "-O", "csv",
         file=file,
     )
 
@@ -509,7 +513,7 @@ def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
         inv_output = run_hledger(
             "balance", "assets:investments",
             "-B",
-            "-p", period, "--flat", "--no-total", "-O", "csv",
+            *period_args, "--flat", "--no-total", "-O", "csv",
             file=file,
         )
         inv_reader = csv.reader(io.StringIO(inv_output))
@@ -530,13 +534,15 @@ def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
     )
 
 
-def load_expense_breakdown(
-    file: str | Path, period: str
+def _load_account_breakdown(
+    file: str | Path, account_type: str, period: str
 ) -> list[tuple[str, Decimal, str]]:
-    """Load per-account expense breakdown for a single period.
+    """Load per-account breakdown for a single period.
 
     Args:
         file: Path to the journal file.
+        account_type: The top-level account to query (e.g. ``"expenses"``
+            or ``"income"``).
         period: A period string like ``'2026-02'``.
 
     Returns:
@@ -547,7 +553,7 @@ def load_expense_breakdown(
         HledgerError: If hledger fails or is not found.
     """
     output = run_hledger(
-        "balance", "expenses",
+        "balance", account_type,
         "-p", period, "--flat", "--no-total", "-O", "csv",
         file=file,
     )
@@ -565,6 +571,44 @@ def load_expense_breakdown(
 
     results.sort(key=lambda x: x[1], reverse=True)
     return results
+
+
+def load_expense_breakdown(
+    file: str | Path, period: str
+) -> list[tuple[str, Decimal, str]]:
+    """Load per-account expense breakdown for a single period.
+
+    Args:
+        file: Path to the journal file.
+        period: A period string like ``'2026-02'``.
+
+    Returns:
+        A list of ``(account, quantity, commodity)`` tuples sorted by amount
+        descending.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    return _load_account_breakdown(file, "expenses", period)
+
+
+def load_income_breakdown(
+    file: str | Path, period: str
+) -> list[tuple[str, Decimal, str]]:
+    """Load per-account income breakdown for a single period.
+
+    Args:
+        file: Path to the journal file.
+        period: A period string like ``'2026-02'``.
+
+    Returns:
+        A list of ``(account, quantity, commodity)`` tuples sorted by amount
+        descending.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    return _load_account_breakdown(file, "income", period)
 
 
 def load_investment_positions(

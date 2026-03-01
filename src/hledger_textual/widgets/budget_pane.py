@@ -12,6 +12,8 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import DataTable, Input, Static
 
+from hledger_textual.dateutil import next_month as _next_month
+from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.budget import (
     BudgetError,
     add_budget_rule,
@@ -39,6 +41,7 @@ class BudgetPane(Widget):
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("left,h", "prev_month", "Prev month", show=False, priority=True),
         Binding("right,l", "next_month", "Next month", show=False, priority=True),
+        Binding("t", "today_month", "Today", show=False, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
     ]
@@ -277,22 +280,17 @@ class BudgetPane(Widget):
 
     def action_prev_month(self) -> None:
         """Navigate to the previous month."""
-        month = self._current_month.month - 1
-        year = self._current_month.year
-        if month < 1:
-            month = 12
-            year -= 1
-        self._current_month = self._current_month.replace(year=year, month=month)
+        self._current_month = _prev_month(self._current_month)
         self._load_budget_data()
 
     def action_next_month(self) -> None:
         """Navigate to the next month."""
-        month = self._current_month.month + 1
-        year = self._current_month.year
-        if month > 12:
-            month = 1
-            year += 1
-        self._current_month = self._current_month.replace(year=year, month=month)
+        self._current_month = _next_month(self._current_month)
+        self._load_budget_data()
+
+    def action_today_month(self) -> None:
+        """Jump to the current month."""
+        self._current_month = date.today().replace(day=1)
         self._load_budget_data()
 
     def action_cursor_down(self) -> None:

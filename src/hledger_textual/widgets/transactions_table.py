@@ -8,9 +8,12 @@ from pathlib import Path
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable, Input, Static
 
+from hledger_textual.dateutil import next_month as _next_month
+from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
 from hledger_textual.models import Transaction
 from hledger_textual.widgets import distribute_column_widths
@@ -32,6 +35,23 @@ class TransactionsTable(Widget):
             this to pin the widget to a specific account, e.g.
             ``'acct:^assets:bank$'``.
     """
+
+    class MonthChanged(Message):
+        """Posted when the displayed month changes (prev/next/reset)."""
+
+        def __init__(self, month: date) -> None:
+            """Initialize with the new month.
+
+            Args:
+                month: First day of the new month.
+            """
+            super().__init__()
+            self.month = month
+
+    @property
+    def current_month(self) -> date:
+        """Return the first day of the currently displayed month."""
+        return self._current_month
 
     def __init__(
         self,
@@ -66,25 +86,27 @@ class TransactionsTable(Widget):
 
     def prev_month(self) -> None:
         """Navigate to the previous month and reload."""
-        m = self._current_month
-        month, year = m.month - 1, m.year
-        if month < 1:
-            month, year = 12, year - 1
-        self._current_month = m.replace(year=year, month=month)
+        self._current_month = _prev_month(self._current_month)
         self._date_query = self._month_query()
         self._update_period_label()
         self._load_transactions()
+        self.post_message(self.MonthChanged(self._current_month))
 
     def next_month(self) -> None:
         """Navigate to the next month and reload."""
-        m = self._current_month
-        month, year = m.month + 1, m.year
-        if month > 12:
-            month, year = 1, year + 1
-        self._current_month = m.replace(year=year, month=month)
+        self._current_month = _next_month(self._current_month)
         self._date_query = self._month_query()
         self._update_period_label()
         self._load_transactions()
+        self.post_message(self.MonthChanged(self._current_month))
+
+    def today_month(self) -> None:
+        """Jump to the current calendar month and reload."""
+        self._current_month = date.today().replace(day=1)
+        self._date_query = self._month_query()
+        self._update_period_label()
+        self._load_transactions()
+        self.post_message(self.MonthChanged(self._current_month))
 
     # ------------------------------------------------------------------
     # Composition
@@ -179,6 +201,7 @@ class TransactionsTable(Widget):
         else:
             self._date_query = ""
         self._load_transactions()
+        self.post_message(self.MonthChanged(self._current_month))
         self.query_one(DataTable).focus()
         return True
 

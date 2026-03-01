@@ -9,10 +9,12 @@ in ``journal.py``.
 from __future__ import annotations
 
 import re
-import shutil
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from hledger_textual.fileutil import backup as _backup
+from hledger_textual.fileutil import cleanup_backup as _cleanup_backup
+from hledger_textual.fileutil import restore as _restore
 from hledger_textual.hledger import HledgerError, check_journal
 from hledger_textual.models import Amount, AmountStyle, BudgetRule
 
@@ -180,22 +182,6 @@ def _format_budget_file(rules: list[BudgetRule]) -> str:
     lines.append("")
     return "\n".join(lines)
 
-
-def _backup(file: Path) -> Path:
-    """Create a backup of a file."""
-    backup_path = file.with_suffix(file.suffix + ".bak")
-    shutil.copy2(file, backup_path)
-    return backup_path
-
-
-def _restore(file: Path, backup: Path) -> None:
-    """Restore a file from backup."""
-    shutil.copy2(backup, file)
-
-
-def _cleanup_backup(backup: Path) -> None:
-    """Remove the backup file."""
-    backup.unlink(missing_ok=True)
 
 
 def write_budget_rules(

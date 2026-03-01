@@ -9,16 +9,23 @@ from pathlib import Path
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Vertical
 from textual.widget import Widget
-from textual.widgets import DataTable, Digits, Static
+from textual.widgets import DataTable, Static
 
 from hledger_textual.config import load_price_tickers
 from hledger_textual.formatter import normalize_commodity
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.formatting import (
+    compute_saving_rate,
+    fmt_amount,
+    fmt_digits,
+)
+from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.hledger import (
     HledgerError,
     load_expense_breakdown,
+    load_income_breakdown,
     load_investment_cost,
     load_investment_eur_by_account,
     load_investment_positions,
@@ -32,58 +39,6 @@ class _DisplayTable(DataTable):
 
     ALLOW_FOCUS = False
     can_focus = False
-
-
-def _fmt_amount(qty: Decimal, commodity: str) -> str:
-    """Format a decimal amount with its commodity symbol.
-
-    Args:
-        qty: The numeric quantity.
-        commodity: The commodity symbol (e.g. '€', 'EUR').
-
-    Returns:
-        A formatted string like '€1,234.56' or '0.00' if no commodity.
-    """
-    if not commodity:
-        return f"{qty:,.2f}"
-    # Left-side single-char commodities (symbols like €, $, £)
-    if len(commodity) == 1:
-        return f"{commodity}{qty:,.2f}"
-    return f"{qty:,.2f} {commodity}"
-
-
-def _fmt_digits(qty: Decimal, commodity: str) -> str:
-    """Format a decimal amount for the Digits widget.
-
-    Like _fmt_amount but uses spaces as thousands separator instead of commas,
-    since the Digits widget does not support comma characters.
-
-    Args:
-        qty: The numeric quantity.
-        commodity: The commodity symbol (e.g. '€', 'EUR').
-
-    Returns:
-        A formatted string like '€1 234.56' or '0.00' if no commodity.
-    """
-    return _fmt_amount(qty, commodity).replace(",", "")
-
-
-def compute_saving_rate(income: Decimal, expenses: Decimal) -> float | None:
-    """Compute the saving rate as a percentage of income.
-
-    Saving rate = (income - expenses) / income * 100.
-    Investments count as savings (they are not included in expenses).
-
-    Args:
-        income: Total income for the period.
-        expenses: Total expenses for the period (excluding investments).
-
-    Returns:
-        The saving rate percentage, or None if income is zero.
-    """
-    if income <= 0:
-        return None
-    return float((income - expenses) / income * 100)
 
 
 def _progress_bar(pct: float, width: int = 8) -> str:
@@ -127,18 +82,12 @@ class SummaryPane(Widget):
 
     def compose(self) -> ComposeResult:
         """Create the summary pane layout."""
-        with Horizontal(id="summary-cards"):
-            with Vertical(classes="summary-card", id="card-income"):
-                yield Static("Income", classes="summary-card-title")
-                yield Digits("--", id="card-income-value", classes="summary-card-value")
-            with Vertical(classes="summary-card", id="card-expenses"):
-                yield Static("Expenses", classes="summary-card-title")
-                yield Digits("--", id="card-expenses-value", classes="summary-card-value")
-            with Vertical(classes="summary-card", id="card-net"):
-                yield Static("Net", classes="summary-card-title")
-                yield Digits("--", id="card-net-value", classes="summary-card-value")
-                yield Static("", id="card-net-note")
-                yield Static("", id="card-saving-rate")
+        yield Static(
+            "Overview",
+            id="summary-overview-title",
+            classes="summary-section-title",
+        )
+        yield PeriodSummaryCards(id="summary-cards")
 
         # Investments section
         with Vertical(id="summary-portfolio"):
@@ -150,10 +99,19 @@ class SummaryPane(Widget):
             yield _DisplayTable(id="summary-portfolio-table", show_cursor=False)
             yield Static("", id="summary-portfolio-loading", classes="summary-portfolio-loading-line")
 
+        # Income breakdown — current month
+        with Vertical(id="summary-income-breakdown"):
+            yield Static(
+                "Income",
+                id="summary-income-title",
+                classes="summary-section-title",
+            )
+            yield DataTable(id="summary-income-table")
+
         # Expense breakdown — current month only
         with Vertical(id="summary-breakdown"):
             yield Static(
-                "This Month's Expenses",
+                "Expenses",
                 id="summary-breakdown-title",
                 classes="summary-section-title",
             )
@@ -173,6 +131,13 @@ class SummaryPane(Widget):
         portfolio_table.add_column("Balance", width=self._PORTFOLIO_FIXED[2])
         portfolio_table.add_column("Market Value", width=self._PORTFOLIO_FIXED[3])
 
+        income_table = self.query_one("#summary-income-table", DataTable)
+        income_table.cursor_type = "none"
+        income_table.show_cursor = False
+        income_table.add_column("Account", width=20)
+        income_table.add_column("Amount", width=self._BREAKDOWN_FIXED[1])
+        income_table.add_column("% of total", width=self._BREAKDOWN_FIXED[2])
+
         breakdown_table = self.query_one("#summary-breakdown-table", DataTable)
         breakdown_table.cursor_type = "none"
         breakdown_table.show_cursor = False
@@ -187,6 +152,8 @@ class SummaryPane(Widget):
         """Recalculate flex column widths for all tables."""
         ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
         distribute_column_widths(ptable, self._PORTFOLIO_FIXED)
+        itable = self.query_one("#summary-income-table", DataTable)
+        distribute_column_widths(itable, self._BREAKDOWN_FIXED)
         btable = self.query_one("#summary-breakdown-table", DataTable)
         distribute_column_widths(btable, self._BREAKDOWN_FIXED)
 
@@ -234,10 +201,9 @@ class SummaryPane(Widget):
         The cards (Income / Expenses / Net) always show the current calendar
         month and are not affected by the breakdown period navigation.
         """
-        # --- Current-month period summary for cards ---
-        thismonth = date.today().strftime("%Y-%m")
+        # --- All-time period summary for cards ---
         try:
-            summary = load_period_summary(self.journal_file, thismonth)
+            summary = load_period_summary(self.journal_file)
         except HledgerError:
             summary = None
 
@@ -321,49 +287,13 @@ class SummaryPane(Widget):
         loading_msg: str,
     ) -> None:
         """Apply card values and basic investments (no EUR market prices)."""
-        # Income / Expenses / Net cards
-        if summary is not None:
-            com = summary.commodity
-            income_text = _fmt_digits(summary.income, com)
-            expense_text = _fmt_digits(summary.expenses, com)
-            net = summary.net
-            net_text = _fmt_digits(abs(net), com)
+        if not self.is_attached:
+            return
+        # Static overview title (all-time data)
+        self.query_one("#summary-overview-title", Static).update("Overview")
 
-            self.query_one("#card-income-value", Digits).update(income_text)
-            self.query_one("#card-expenses-value", Digits).update(expense_text)
-
-            net_widget = self.query_one("#card-net-value", Digits)
-            if net >= 0:
-                net_widget.update(net_text)
-                net_widget.remove_class("net-negative")
-                net_widget.add_class("net-positive")
-            else:
-                net_widget.update(f"-{net_text}")
-                net_widget.remove_class("net-positive")
-                net_widget.add_class("net-negative")
-
-            note = self.query_one("#card-net-note", Static)
-            if summary.investments > 0:
-                inv_text = _fmt_amount(summary.investments, com)
-                note.update(f"incl. {inv_text} invested")
-            else:
-                note.update("")
-
-            rate_widget = self.query_one("#card-saving-rate", Static)
-            rate = compute_saving_rate(summary.income, summary.expenses)
-            if rate is not None:
-                rate_widget.update(f"Saving rate: {rate:.0f}%")
-            else:
-                rate_widget.update("")
-        else:
-            for widget_id in (
-                "#card-income-value",
-                "#card-expenses-value",
-                "#card-net-value",
-            ):
-                self.query_one(widget_id, Digits).update("--")
-            self.query_one("#card-net-note", Static).update("")
-            self.query_one("#card-saving-rate", Static).update("")
+        # Income / Expenses / Net cards — delegated to PeriodSummaryCards
+        self.query_one(PeriodSummaryCards).update_summary(summary)
 
         # Investments table — columns are fixed; clear rows only
         ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
@@ -393,6 +323,8 @@ class SummaryPane(Widget):
         post_msg: str,
     ) -> None:
         """Rebuild the investments table with actual Value (€) data from pricehist."""
+        if not self.is_attached:
+            return
         ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
         ptable.clear()
 
@@ -443,7 +375,7 @@ class SummaryPane(Widget):
                 (cost_by_account[acc][1] for acc, _ in accs if acc in cost_by_account),
                 "",
             )
-            book_str = _fmt_amount(book_total, book_com) if book_com else f"{book_total:,.2f}"
+            book_str = fmt_amount(book_total, book_com) if book_com else f"{book_total:,.2f}"
 
             if eur_by_account is not None and com in tickers:
                 # EUR market value: sum across all accounts for this commodity
@@ -459,7 +391,7 @@ class SummaryPane(Widget):
                 if eur_com == com:
                     ptable.add_row(com, f"{total_qty:g}", book_str, "\u2014")
                     continue
-                eur_str = _fmt_amount(eur_total, eur_com) if eur_com else f"{eur_total:,.2f}"
+                eur_str = fmt_amount(eur_total, eur_com) if eur_com else f"{eur_total:,.2f}"
                 # Color: green if market value exceeds book value (gain), red if loss
                 if book_com and eur_total > book_total:
                     eur_str = f"[green]{eur_str}[/green]"
@@ -471,22 +403,66 @@ class SummaryPane(Widget):
 
     @work(thread=True, exclusive=True, group="summary-breakdown")
     def _load_breakdown_data(self) -> None:
-        """Load expense breakdown for the selected month in a background thread."""
+        """Load income and expense breakdowns for the selected month."""
         period = self._period_str()
+
+        try:
+            income_breakdown = load_income_breakdown(self.journal_file, period)
+        except HledgerError:
+            income_breakdown = []
 
         try:
             breakdown = load_expense_breakdown(self.journal_file, period)
         except HledgerError:
             breakdown = []
 
-        self.app.call_from_thread(self._apply_breakdown_data, breakdown)
+        self.app.call_from_thread(
+            self._apply_breakdown_data, income_breakdown, breakdown
+        )
 
-    def _apply_breakdown_data(self, breakdown: list) -> None:
-        """Apply loaded expense breakdown to the table."""
+    def _apply_breakdown_data(
+        self, income_breakdown: list, breakdown: list
+    ) -> None:
+        """Apply loaded income and expense breakdowns to their tables."""
+        if not self.is_attached:
+            return
+
+        month_name = self._current_month.strftime("%B %Y")
+
+        # --- Income breakdown ---
+        self.query_one("#summary-income-title", Static).update(
+            f"{month_name} Income"
+        )
+
+        itable = self.query_one("#summary-income-table", DataTable)
+        itable.clear()
+
+        if not income_breakdown:
+            itable.add_row("[dim]No income recorded this month[/dim]", "", "")
+        else:
+            total_inc = sum(qty for _, qty, _ in income_breakdown)
+            for account, qty, commodity in income_breakdown:
+                pct = float(qty / total_inc * 100) if total_inc else 0.0
+                bar = _progress_bar(pct, width=12)
+                itable.add_row(
+                    account,
+                    fmt_amount(qty, commodity),
+                    f"{bar} {pct:.0f}%",
+                )
+            self.call_after_refresh(
+                distribute_column_widths, itable, self._BREAKDOWN_FIXED
+            )
+
+        # --- Expense breakdown ---
+        self.query_one("#summary-breakdown-title", Static).update(
+            f"{month_name} Expenses"
+        )
+
         table = self.query_one("#summary-breakdown-table", DataTable)
         table.clear()
 
         if not breakdown:
+            table.add_row("[dim]No expenses recorded this month[/dim]", "", "")
             return
 
         total_exp = sum(qty for _, qty, _ in breakdown)
@@ -495,7 +471,7 @@ class SummaryPane(Widget):
             bar = _progress_bar(pct, width=12)
             table.add_row(
                 account,
-                _fmt_amount(qty, commodity),
+                fmt_amount(qty, commodity),
                 f"{bar} {pct:.0f}%",
             )
 

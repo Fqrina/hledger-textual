@@ -38,9 +38,12 @@ SummaryPane {
     padding-top: 1;
 }
 
+#summary-overview-title {
+    margin-bottom: 1;
+}
+
 #summary-cards {
     height: auto;
-    padding: 0 1;
 }
 
 .summary-card {
@@ -98,30 +101,53 @@ SummaryPane {
     margin-top: 1;
 }
 
-#card-income-value {
+.income-value {
     color: green;
 }
 
-#card-net-value.net-positive {
+.net-value.net-positive {
     color: green;
 }
 
-#card-net-value.net-negative {
+.net-value.net-negative {
     color: tomato;
 }
 
-#card-net-note {
+.net-note {
     width: 100%;
     text-align: center;
     color: $text-muted;
     height: 1;
 }
 
-#card-saving-rate {
+.saving-rate {
     width: 100%;
     text-align: center;
     color: $text-muted;
     height: 1;
+}
+
+/* Reusable period summary cards widget + inner container */
+PeriodSummaryCards {
+    height: auto;
+}
+
+.period-summary-cards {
+    height: auto;
+    padding: 0 1;
+}
+
+/* --- Income Breakdown --- */
+
+#summary-income-breakdown {
+    height: auto;
+    padding: 0 1;
+}
+
+#summary-income-table {
+    height: auto;
+    max-height: 20;
+    overflow-x: hidden;
 }
 
 /* --- Unified Pane Toolbar --- */

@@ -9,9 +9,11 @@ All write operations follow a safe pattern:
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
+from hledger_textual.fileutil import backup as _backup
+from hledger_textual.fileutil import cleanup_backup as _cleanup_backup
+from hledger_textual.fileutil import restore as _restore
 from hledger_textual.formatter import format_transaction
 from hledger_textual.hledger import HledgerError, check_journal
 from hledger_textual.models import Transaction
@@ -19,39 +21,6 @@ from hledger_textual.models import Transaction
 
 class JournalError(Exception):
     """Raised when a journal manipulation fails."""
-
-
-def _backup(file: Path) -> Path:
-    """Create a backup of the journal file.
-
-    Args:
-        file: Path to the journal file.
-
-    Returns:
-        Path to the backup file.
-    """
-    backup_path = file.with_suffix(file.suffix + ".bak")
-    shutil.copy2(file, backup_path)
-    return backup_path
-
-
-def _restore(file: Path, backup: Path) -> None:
-    """Restore a journal file from backup.
-
-    Args:
-        file: Path to the journal file to restore.
-        backup: Path to the backup file.
-    """
-    shutil.copy2(backup, file)
-
-
-def _cleanup_backup(backup: Path) -> None:
-    """Remove the backup file.
-
-    Args:
-        backup: Path to the backup file.
-    """
-    backup.unlink(missing_ok=True)
 
 
 def _validate_and_finalize(file: Path, backup: Path) -> None:
