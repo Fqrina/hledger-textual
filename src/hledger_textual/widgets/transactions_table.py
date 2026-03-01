@@ -8,6 +8,7 @@ from pathlib import Path
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable, Input, Static
 
@@ -32,6 +33,23 @@ class TransactionsTable(Widget):
             this to pin the widget to a specific account, e.g.
             ``'acct:^assets:bank$'``.
     """
+
+    class MonthChanged(Message):
+        """Posted when the displayed month changes (prev/next/reset)."""
+
+        def __init__(self, month: date) -> None:
+            """Initialize with the new month.
+
+            Args:
+                month: First day of the new month.
+            """
+            super().__init__()
+            self.month = month
+
+    @property
+    def current_month(self) -> date:
+        """Return the first day of the currently displayed month."""
+        return self._current_month
 
     def __init__(
         self,
@@ -74,6 +92,7 @@ class TransactionsTable(Widget):
         self._date_query = self._month_query()
         self._update_period_label()
         self._load_transactions()
+        self.post_message(self.MonthChanged(self._current_month))
 
     def next_month(self) -> None:
         """Navigate to the next month and reload."""
@@ -85,6 +104,7 @@ class TransactionsTable(Widget):
         self._date_query = self._month_query()
         self._update_period_label()
         self._load_transactions()
+        self.post_message(self.MonthChanged(self._current_month))
 
     # ------------------------------------------------------------------
     # Composition
@@ -179,6 +199,7 @@ class TransactionsTable(Widget):
         else:
             self._date_query = ""
         self._load_transactions()
+        self.post_message(self.MonthChanged(self._current_month))
         self.query_one(DataTable).focus()
         return True
 

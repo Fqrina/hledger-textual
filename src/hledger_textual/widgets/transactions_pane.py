@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 from textual import work
@@ -9,7 +10,9 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
 
+from hledger_textual.hledger import HledgerError, load_period_summary
 from hledger_textual.models import Transaction
+from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
 
@@ -18,7 +21,8 @@ class TransactionsPane(Widget):
 
     Composes a :class:`~hledger_textual.widgets.transactions_table.TransactionsTable`
     for the shared filter bar and DataTable, and adds journal-mutation bindings
-    on top.
+    on top.  Compact summary cards above the table show the current month's
+    Income / Expenses / Net and update when the user navigates months.
     """
 
     BINDINGS = [
@@ -43,8 +47,13 @@ class TransactionsPane(Widget):
         self.journal_file = journal_file
 
     def compose(self) -> ComposeResult:
-        """Render the shared transactions table."""
+        """Render compact summary cards and the shared transactions table."""
+        yield PeriodSummaryCards(compact=True, id="txn-summary-cards")
         yield TransactionsTable(self.journal_file)
+
+    def on_mount(self) -> None:
+        """Load the summary for the initial month."""
+        self._load_summary(self._table.current_month)
 
     def on_show(self) -> None:
         """Re-focus the table when the pane becomes visible."""
@@ -55,12 +64,23 @@ class TransactionsPane(Widget):
         return self.query_one(TransactionsTable)
 
     # ------------------------------------------------------------------
+    # Month-change handler
+    # ------------------------------------------------------------------
+
+    def on_transactions_table_month_changed(
+        self, event: TransactionsTable.MonthChanged
+    ) -> None:
+        """Reload summary cards when the displayed month changes."""
+        self._load_summary(event.month)
+
+    # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
 
     def action_refresh(self) -> None:
-        """Reload transactions from the journal."""
+        """Reload transactions and summary from the journal."""
         self._table.do_refresh()
+        self._load_summary(self._table.current_month)
 
     def action_filter(self) -> None:
         """Show the filter panel."""
@@ -98,6 +118,23 @@ class TransactionsPane(Widget):
     def action_delete(self) -> None:
         """Delete the selected transaction (with confirmation)."""
         self._table.do_delete()
+
+    # ------------------------------------------------------------------
+    # Summary loading
+    # ------------------------------------------------------------------
+
+    @work(thread=True, exclusive=True, group="txn-summary")
+    def _load_summary(self, month: date) -> None:
+        """Load the period summary for *month* in a background thread."""
+        period = month.strftime("%Y-%m")
+        try:
+            summary = load_period_summary(self.journal_file, period)
+        except HledgerError:
+            summary = None
+
+        self.app.call_from_thread(
+            self.query_one(PeriodSummaryCards).update_summary, summary
+        )
 
     # ------------------------------------------------------------------
     # Mutation helpers (add is local — only needed in the main view)
