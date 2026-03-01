@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from textual.widgets import Input
 
+from hledger_textual.widgets.constants import PASSTHROUGH_KEYS
+
 
 class DateInput(Input):
     """An Input that only accepts digits and auto-inserts dashes for YYYY-MM-DD format.
@@ -13,23 +15,7 @@ class DateInput(Input):
     inserted automatically so the user only types the 8 digits.
     """
 
-    # Keys that should pass through to the default Input handler.
-    _PASSTHROUGH_KEYS = frozenset(
-        {
-            "backspace",
-            "delete",
-            "left",
-            "right",
-            "home",
-            "end",
-            "tab",
-            "shift+tab",
-            "escape",
-            "enter",
-            "up",
-            "down",
-        }
-    )
+    _PASSTHROUGH_KEYS = PASSTHROUGH_KEYS
 
     def __init__(self, **kwargs) -> None:
         """Initialize with sensible defaults for a date field."""

@@ -534,13 +534,15 @@ def load_period_summary(file: str | Path, period: str | None = None) -> PeriodSu
     )
 
 
-def load_expense_breakdown(
-    file: str | Path, period: str
+def _load_account_breakdown(
+    file: str | Path, account_type: str, period: str
 ) -> list[tuple[str, Decimal, str]]:
-    """Load per-account expense breakdown for a single period.
+    """Load per-account breakdown for a single period.
 
     Args:
         file: Path to the journal file.
+        account_type: The top-level account to query (e.g. ``"expenses"``
+            or ``"income"``).
         period: A period string like ``'2026-02'``.
 
     Returns:
@@ -551,7 +553,7 @@ def load_expense_breakdown(
         HledgerError: If hledger fails or is not found.
     """
     output = run_hledger(
-        "balance", "expenses",
+        "balance", account_type,
         "-p", period, "--flat", "--no-total", "-O", "csv",
         file=file,
     )
@@ -569,6 +571,25 @@ def load_expense_breakdown(
 
     results.sort(key=lambda x: x[1], reverse=True)
     return results
+
+
+def load_expense_breakdown(
+    file: str | Path, period: str
+) -> list[tuple[str, Decimal, str]]:
+    """Load per-account expense breakdown for a single period.
+
+    Args:
+        file: Path to the journal file.
+        period: A period string like ``'2026-02'``.
+
+    Returns:
+        A list of ``(account, quantity, commodity)`` tuples sorted by amount
+        descending.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    return _load_account_breakdown(file, "expenses", period)
 
 
 def load_income_breakdown(
@@ -587,25 +608,7 @@ def load_income_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    output = run_hledger(
-        "balance", "income",
-        "-p", period, "--flat", "--no-total", "-O", "csv",
-        file=file,
-    )
-
-    results: list[tuple[str, Decimal, str]] = []
-    reader = csv.reader(io.StringIO(output))
-    next(reader, None)  # skip header
-    for row in reader:
-        if len(row) < 2 or not row[0]:
-            continue
-        account = row[0].strip()
-        qty, com = _parse_budget_amount(row[1].strip())
-        if qty:
-            results.append((account, abs(qty), com))
-
-    results.sort(key=lambda x: x[1], reverse=True)
-    return results
+    return _load_account_breakdown(file, "income", period)
 
 
 def load_investment_positions(

@@ -12,6 +12,8 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable, Input, Static
 
+from hledger_textual.dateutil import next_month as _next_month
+from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
 from hledger_textual.models import Transaction
 from hledger_textual.widgets import distribute_column_widths
@@ -84,11 +86,7 @@ class TransactionsTable(Widget):
 
     def prev_month(self) -> None:
         """Navigate to the previous month and reload."""
-        m = self._current_month
-        month, year = m.month - 1, m.year
-        if month < 1:
-            month, year = 12, year - 1
-        self._current_month = m.replace(year=year, month=month)
+        self._current_month = _prev_month(self._current_month)
         self._date_query = self._month_query()
         self._update_period_label()
         self._load_transactions()
@@ -96,11 +94,7 @@ class TransactionsTable(Widget):
 
     def next_month(self) -> None:
         """Navigate to the next month and reload."""
-        m = self._current_month
-        month, year = m.month + 1, m.year
-        if month > 12:
-            month, year = 1, year + 1
-        self._current_month = m.replace(year=year, month=month)
+        self._current_month = _next_month(self._current_month)
         self._date_query = self._month_query()
         self._update_period_label()
         self._load_transactions()

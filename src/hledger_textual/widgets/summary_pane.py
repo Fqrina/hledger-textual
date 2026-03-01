@@ -33,10 +33,6 @@ from hledger_textual.hledger import (
 )
 from hledger_textual.prices import PriceError, get_prices_file, has_pricehist
 
-# Backward-compatible aliases so existing test imports still work
-_fmt_amount = fmt_amount
-_fmt_digits = fmt_digits
-
 
 class _DisplayTable(DataTable):
     """Read-only DataTable that never receives keyboard focus."""
@@ -379,7 +375,7 @@ class SummaryPane(Widget):
                 (cost_by_account[acc][1] for acc, _ in accs if acc in cost_by_account),
                 "",
             )
-            book_str = _fmt_amount(book_total, book_com) if book_com else f"{book_total:,.2f}"
+            book_str = fmt_amount(book_total, book_com) if book_com else f"{book_total:,.2f}"
 
             if eur_by_account is not None and com in tickers:
                 # EUR market value: sum across all accounts for this commodity
@@ -395,7 +391,7 @@ class SummaryPane(Widget):
                 if eur_com == com:
                     ptable.add_row(com, f"{total_qty:g}", book_str, "\u2014")
                     continue
-                eur_str = _fmt_amount(eur_total, eur_com) if eur_com else f"{eur_total:,.2f}"
+                eur_str = fmt_amount(eur_total, eur_com) if eur_com else f"{eur_total:,.2f}"
                 # Color: green if market value exceeds book value (gain), red if loss
                 if book_com and eur_total > book_total:
                     eur_str = f"[green]{eur_str}[/green]"
@@ -450,7 +446,7 @@ class SummaryPane(Widget):
                 bar = _progress_bar(pct, width=12)
                 itable.add_row(
                     account,
-                    _fmt_amount(qty, commodity),
+                    fmt_amount(qty, commodity),
                     f"{bar} {pct:.0f}%",
                 )
             self.call_after_refresh(
@@ -475,7 +471,7 @@ class SummaryPane(Widget):
             bar = _progress_bar(pct, width=12)
             table.add_row(
                 account,
-                _fmt_amount(qty, commodity),
+                fmt_amount(qty, commodity),
                 f"{bar} {pct:.0f}%",
             )
 

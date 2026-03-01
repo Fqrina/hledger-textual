@@ -11,12 +11,14 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Digits, Static
 
+from hledger_textual.widgets.formatting import (
+    compute_saving_rate,
+    fmt_amount,
+    fmt_digits,
+)
 from hledger_textual.widgets.summary_pane import (
     SummaryPane,
-    _fmt_amount,
-    _fmt_digits,
     _progress_bar,
-    compute_saving_rate,
 )
 from tests.conftest import has_hledger
 
@@ -68,39 +70,39 @@ def empty_summary_journal(tmp_path: Path) -> Path:
 
 
 class TestFmtAmount:
-    """Tests for _fmt_amount helper."""
+    """Tests for fmt_amount helper."""
 
     def test_left_symbol(self):
         """Left-side single-char commodity is prepended."""
-        assert _fmt_amount(Decimal("1234.56"), "€") == "€1,234.56"
+        assert fmt_amount(Decimal("1234.56"), "€") == "€1,234.56"
 
     def test_right_code(self):
         """Multi-char commodity codes are appended with a space."""
-        assert _fmt_amount(Decimal("500.00"), "EUR") == "500.00 EUR"
+        assert fmt_amount(Decimal("500.00"), "EUR") == "500.00 EUR"
 
     def test_no_commodity(self):
         """Without a commodity, only the number is returned."""
-        assert _fmt_amount(Decimal("42.00"), "") == "42.00"
+        assert fmt_amount(Decimal("42.00"), "") == "42.00"
 
 
 class TestFmtDigits:
-    """Tests for _fmt_digits helper (Digits-compatible formatting)."""
+    """Tests for fmt_digits helper (Digits-compatible formatting)."""
 
     def test_removes_commas(self):
         """Commas are removed for Digits widget compatibility."""
-        assert _fmt_digits(Decimal("1234.56"), "€") == "€1234.56"
+        assert fmt_digits(Decimal("1234.56"), "€") == "€1234.56"
 
     def test_no_comma_passthrough(self):
         """Small amounts without commas pass through unchanged."""
-        assert _fmt_digits(Decimal("42.00"), "€") == "€42.00"
+        assert fmt_digits(Decimal("42.00"), "€") == "€42.00"
 
     def test_right_code(self):
         """Multi-char commodity codes work correctly."""
-        assert _fmt_digits(Decimal("1000.00"), "EUR") == "1000.00 EUR"
+        assert fmt_digits(Decimal("1000.00"), "EUR") == "1000.00 EUR"
 
     def test_no_commodity(self):
         """Without a commodity, only the number is returned."""
-        assert _fmt_digits(Decimal("1234.00"), "") == "1234.00"
+        assert fmt_digits(Decimal("1234.00"), "") == "1234.00"
 
 
 class TestProgressBar:

@@ -7,6 +7,8 @@ from decimal import Decimal, InvalidOperation
 from textual.events import Blur
 from textual.widgets import Input
 
+from hledger_textual.widgets.constants import PASSTHROUGH_KEYS
+
 
 class AmountInput(Input):
     """An Input that only accepts valid amount characters and formats on blur.
@@ -16,23 +18,7 @@ class AmountInput(Input):
     the value is reformatted to exactly 2 decimal places.
     """
 
-    # Keys that should pass through to the default Input handler.
-    _PASSTHROUGH_KEYS = frozenset(
-        {
-            "backspace",
-            "delete",
-            "left",
-            "right",
-            "home",
-            "end",
-            "tab",
-            "shift+tab",
-            "escape",
-            "enter",
-            "up",
-            "down",
-        }
-    )
+    _PASSTHROUGH_KEYS = PASSTHROUGH_KEYS
 
     # Characters allowed in amount input besides digits.
     _ALLOWED_CHARS = frozenset({"-", "."})
