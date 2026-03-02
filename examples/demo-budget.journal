@@ -7,4 +7,9 @@
     expenses:housing:utilities           €120.00
     expenses:transport                    €80.00
     expenses:subscriptions                €50.00
+    expenses:entertainment               €100.00
+    expenses:gifts                        €50.00
+    expenses:health                       €50.00
+    expenses:travel                      €200.00
+    expenses:insurance                    €40.00
     assets:budget
