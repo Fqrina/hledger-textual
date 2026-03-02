@@ -48,6 +48,9 @@ class TransactionsTable(Widget):
             super().__init__()
             self.month = month
 
+    class JournalChanged(Message):
+        """Posted when a transaction is created, edited, or deleted."""
+
     @property
     def current_month(self) -> date:
         """Return the first day of the currently displayed month."""
@@ -274,6 +277,7 @@ class TransactionsTable(Widget):
             replace_transaction(self.journal_file, original, updated)
             self.app.call_from_thread(self.reload)
             self.app.call_from_thread(self.notify, "Transaction updated", timeout=3)
+            self.app.call_from_thread(self.post_message, self.JournalChanged())
         except JournalError as exc:
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8
@@ -288,6 +292,7 @@ class TransactionsTable(Widget):
             delete_transaction(self.journal_file, transaction)
             self.app.call_from_thread(self.reload)
             self.app.call_from_thread(self.notify, "Transaction deleted", timeout=3)
+            self.app.call_from_thread(self.post_message, self.JournalChanged())
         except JournalError as exc:
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8
