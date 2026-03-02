@@ -9,6 +9,14 @@ Built with [Textual](https://textual.textualize.io) and Python.
 
 ![hledger-textual summary](https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/001.png)
 
+<table>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/002" alt="Transactions" width="300"/></td>
+    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/003" alt="Transactions add - edit dialog" width="300"/></td>
+    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/004" alt="Reports with investment and charts" width="300"/></td>
+  </tr>
+</table>
+
 ## Stack
 
 - **Python 3.12+**
@@ -37,7 +45,7 @@ uv tool install hledger-textual
 ```bash
 hledger-textual -f path/to/your.journal
 ```
-
+rrr
 The journal file is resolved in this order:
 
 1. `-f` / `--file` CLI argument
