@@ -4,18 +4,51 @@ from pathlib import Path
 
 import pytest
 
+from decimal import Decimal
+
 from hledger_textual.journal import (
     JournalError,
+    _find_date_includes,
+    _insert_include_sorted,
+    _target_subjournal_name,
     append_transaction,
     delete_transaction,
     replace_transaction,
 )
 from hledger_textual.hledger import HledgerError, load_transactions
-from hledger_textual.models import SourcePosition, Transaction
+from hledger_textual.models import (
+    Amount,
+    AmountStyle,
+    Posting,
+    SourcePosition,
+    Transaction,
+    TransactionStatus,
+)
 
 from tests.conftest import has_hledger
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+
+
+def _make_transaction(date: str, description: str) -> Transaction:
+    """Create a minimal valid transaction for routing tests."""
+    style = AmountStyle(commodity_side="L", commodity_spaced=False, decimal_mark=".", precision=2)
+    return Transaction(
+        index=0,
+        date=date,
+        description=description,
+        status=TransactionStatus.UNMARKED,
+        postings=[
+            Posting(
+                account="expenses:food:groceries",
+                amounts=[Amount(commodity="€", quantity=Decimal("50.00"), style=style)],
+            ),
+            Posting(
+                account="assets:bank:checking",
+                amounts=[Amount(commodity="€", quantity=Decimal("-50.00"), style=style)],
+            ),
+        ],
+    )
 
 
 class TestAppendTransaction:
@@ -214,8 +247,8 @@ class TestExceptExceptionPaths:
             date="2026-01-01",
             description="Out of bounds",
             source_pos=(
-                SourcePosition("test.journal", 1000, 1),
-                SourcePosition("test.journal", 1003, 1),
+                SourcePosition(str(tmp_journal), 1000, 1),
+                SourcePosition(str(tmp_journal), 1003, 1),
             ),
         )
 
@@ -240,3 +273,346 @@ class TestAppendEdgeCases:
 
         result = tmp_journal.read_text()
         assert "Rent payment" in result
+
+
+class TestSubJournalOperations:
+    """Tests for replace/delete on transactions living in included sub-journals."""
+
+    def test_replace_in_sub_journal(
+        self, tmp_journal_with_includes: Path, new_transaction: Transaction
+    ):
+        """Replace a transaction in a sub-journal; main journal stays untouched."""
+        main = tmp_journal_with_includes
+        main_original = main.read_text()
+        txns = load_transactions(main)
+        original_count = len(txns)
+
+        # Pick a transaction from the January sub-journal
+        jan_txn = next(t for t in txns if t.description == "Grocery shopping")
+
+        replace_transaction(main, jan_txn, new_transaction)
+
+        updated = load_transactions(main)
+        assert len(updated) == original_count
+        descriptions = [t.description for t in updated]
+        assert "Rent payment" in descriptions
+        assert "Grocery shopping" not in descriptions
+        # Main journal must not have been modified
+        assert main.read_text() == main_original
+
+    def test_replace_preserves_other_sub_journal(
+        self, tmp_journal_with_includes: Path, new_transaction: Transaction
+    ):
+        """Replacing in one sub-journal leaves the other sub-journal intact."""
+        main = tmp_journal_with_includes
+        feb_file = main.parent / "2026-02.journal"
+        feb_original = feb_file.read_text()
+
+        txns = load_transactions(main)
+        jan_txn = next(t for t in txns if t.description == "Salary")
+
+        replace_transaction(main, jan_txn, new_transaction)
+
+        assert feb_file.read_text() == feb_original
+
+    def test_delete_from_sub_journal(self, tmp_journal_with_includes: Path):
+        """Delete a transaction from a sub-journal; main journal stays untouched."""
+        main = tmp_journal_with_includes
+        main_original = main.read_text()
+        txns = load_transactions(main)
+        original_count = len(txns)
+
+        feb_txn = next(t for t in txns if t.description == "Electricity bill")
+
+        delete_transaction(main, feb_txn)
+
+        updated = load_transactions(main)
+        assert len(updated) == original_count - 1
+        descriptions = [t.description for t in updated]
+        assert "Electricity bill" not in descriptions
+        # Main journal must not have been modified
+        assert main.read_text() == main_original
+
+    def test_no_backup_left_after_sub_journal_replace(
+        self, tmp_journal_with_includes: Path, new_transaction: Transaction
+    ):
+        """No .bak files remain after a successful replace in a sub-journal."""
+        main = tmp_journal_with_includes
+        txns = load_transactions(main)
+        jan_txn = next(t for t in txns if t.description == "Grocery shopping")
+
+        replace_transaction(main, jan_txn, new_transaction)
+
+        bak_files = list(main.parent.glob("*.bak"))
+        assert bak_files == []
+
+    def test_no_backup_left_after_sub_journal_delete(
+        self, tmp_journal_with_includes: Path
+    ):
+        """No .bak files remain after a successful delete in a sub-journal."""
+        main = tmp_journal_with_includes
+        txns = load_transactions(main)
+        feb_txn = next(t for t in txns if t.description == "Rent payment")
+
+        delete_transaction(main, feb_txn)
+
+        bak_files = list(main.parent.glob("*.bak"))
+        assert bak_files == []
+
+    def test_validation_failure_restores_sub_journal(
+        self, tmp_journal_with_includes: Path, new_transaction: Transaction, monkeypatch
+    ):
+        """On validation failure, the sub-journal (not main) is restored."""
+        main = tmp_journal_with_includes
+        txns = load_transactions(main)
+        jan_txn = next(t for t in txns if t.description == "Grocery shopping")
+
+        jan_file = main.parent / "2026-01.journal"
+        jan_original = jan_file.read_text()
+        main_original = main.read_text()
+
+        def _fail_check(file):
+            raise HledgerError("journal invalid")
+
+        monkeypatch.setattr("hledger_textual.journal.check_journal", _fail_check)
+
+        with pytest.raises(JournalError, match="validation failed"):
+            replace_transaction(main, jan_txn, new_transaction)
+
+        assert jan_file.read_text() == jan_original
+        assert main.read_text() == main_original
+        bak_files = list(main.parent.glob("*.bak"))
+        assert bak_files == []
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for routing helpers (no hledger required)
+# ---------------------------------------------------------------------------
+
+
+class TestFindDateIncludes:
+    """Tests for _find_date_includes."""
+
+    def test_detects_date_includes(self):
+        content = "include 2026-01.journal\ninclude 2026-02.journal\n"
+        assert _find_date_includes(content) == ["2026-01.journal", "2026-02.journal"]
+
+    def test_ignores_non_date_includes(self):
+        content = "include budget.journal\ninclude accounts.journal\n"
+        assert _find_date_includes(content) == []
+
+    def test_mixed_includes(self):
+        content = (
+            "include budget.journal\n"
+            "include 2026-01.journal\n"
+            "include accounts.journal\n"
+            "include 2026-02.journal\n"
+        )
+        assert _find_date_includes(content) == ["2026-01.journal", "2026-02.journal"]
+
+    def test_empty_content(self):
+        assert _find_date_includes("") == []
+
+    def test_leading_whitespace(self):
+        content = "  include 2026-03.journal\n"
+        assert _find_date_includes(content) == ["2026-03.journal"]
+
+
+class TestTargetSubjournalName:
+    """Tests for _target_subjournal_name."""
+
+    def test_derives_filename_from_date(self):
+        txn = Transaction(index=0, date="2026-03-15", description="test")
+        assert _target_subjournal_name(txn) == "2026-03.journal"
+
+    def test_january(self):
+        txn = Transaction(index=0, date="2026-01-01", description="test")
+        assert _target_subjournal_name(txn) == "2026-01.journal"
+
+    def test_december(self):
+        txn = Transaction(index=0, date="2025-12-31", description="test")
+        assert _target_subjournal_name(txn) == "2025-12.journal"
+
+
+class TestInsertIncludeSorted:
+    """Tests for _insert_include_sorted."""
+
+    def test_insert_at_end(self):
+        content = "include 2026-01.journal\ninclude 2026-02.journal\n"
+        result = _insert_include_sorted(content, "2026-03.journal")
+        assert result == (
+            "include 2026-01.journal\n"
+            "include 2026-02.journal\n"
+            "include 2026-03.journal\n"
+        )
+
+    def test_insert_at_beginning(self):
+        content = "include 2026-02.journal\ninclude 2026-03.journal\n"
+        result = _insert_include_sorted(content, "2026-01.journal")
+        assert result == (
+            "include 2026-01.journal\n"
+            "include 2026-02.journal\n"
+            "include 2026-03.journal\n"
+        )
+
+    def test_insert_in_middle(self):
+        content = "include 2026-01.journal\ninclude 2026-03.journal\n"
+        result = _insert_include_sorted(content, "2026-02.journal")
+        assert result == (
+            "include 2026-01.journal\n"
+            "include 2026-02.journal\n"
+            "include 2026-03.journal\n"
+        )
+
+    def test_preserves_non_date_includes(self):
+        content = (
+            "; Main journal\n"
+            "\n"
+            "include 2026-01.journal\n"
+            "include 2026-02.journal\n"
+        )
+        result = _insert_include_sorted(content, "2026-03.journal")
+        assert "include 2026-03.journal\n" in result
+        assert "; Main journal\n" in result
+        # Verify order of date includes
+        lines = result.splitlines()
+        date_includes = [l for l in lines if "20" in l and ".journal" in l]
+        assert date_includes == [
+            "include 2026-01.journal",
+            "include 2026-02.journal",
+            "include 2026-03.journal",
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Integration tests for append_transaction routing
+# ---------------------------------------------------------------------------
+
+
+class TestAppendTransactionRouting:
+    """Tests for append_transaction's sub-journal routing logic."""
+
+    def test_routes_to_existing_subjournal(self, tmp_journal_with_includes: Path):
+        """A Feb transaction is routed to the existing 2026-02.journal."""
+        main = tmp_journal_with_includes
+        main_original = main.read_text()
+        feb_file = main.parent / "2026-02.journal"
+
+        txn = _make_transaction("2026-02-20", "Coffee beans")
+        append_transaction(main, txn)
+
+        # Main journal must not be modified
+        assert main.read_text() == main_original
+        # Transaction should be in the Feb sub-journal
+        assert "Coffee beans" in feb_file.read_text()
+        # Visible via hledger
+        all_txns = load_transactions(main)
+        assert any(t.description == "Coffee beans" for t in all_txns)
+
+    def test_creates_new_subjournal(self, tmp_journal_with_includes: Path):
+        """An Apr transaction creates 2026-04.journal and adds its include."""
+        main = tmp_journal_with_includes
+        apr_file = main.parent / "2026-04.journal"
+        assert not apr_file.exists()
+
+        txn = _make_transaction("2026-04-10", "April groceries")
+        append_transaction(main, txn)
+
+        assert apr_file.exists()
+        assert "April groceries" in apr_file.read_text()
+        assert "include 2026-04.journal" in main.read_text()
+
+    def test_new_include_is_sorted(self, tmp_journal_with_includes: Path):
+        """The new include directive is inserted in chronological order."""
+        main = tmp_journal_with_includes
+
+        txn = _make_transaction("2026-04-10", "April groceries")
+        append_transaction(main, txn)
+
+        includes = _find_date_includes(main.read_text())
+        assert includes == [
+            "2026-01.journal", "2026-02.journal", "2026-03.journal", "2026-04.journal",
+        ]
+
+    def test_fallback_no_date_includes(self, tmp_journal: Path, new_transaction: Transaction):
+        """Without date-based includes, appends directly to the main journal (legacy)."""
+        original = load_transactions(tmp_journal)
+        append_transaction(tmp_journal, new_transaction)
+        updated = load_transactions(tmp_journal)
+        assert len(updated) == len(original) + 1
+        assert "Rent payment" in tmp_journal.read_text()
+
+    def test_no_backup_left_routing_existing(self, tmp_journal_with_includes: Path):
+        """No .bak files remain after routing to an existing sub-journal."""
+        main = tmp_journal_with_includes
+        txn = _make_transaction("2026-02-20", "Coffee beans")
+        append_transaction(main, txn)
+
+        bak_files = list(main.parent.glob("*.bak"))
+        assert bak_files == []
+
+    def test_no_backup_left_creating_new(self, tmp_journal_with_includes: Path):
+        """No .bak files remain after creating a new sub-journal."""
+        main = tmp_journal_with_includes
+        txn = _make_transaction("2026-04-10", "April groceries")
+        append_transaction(main, txn)
+
+        bak_files = list(main.parent.glob("*.bak"))
+        assert bak_files == []
+
+    def test_validation_failure_restores_existing_subjournal(
+        self, tmp_journal_with_includes: Path, monkeypatch
+    ):
+        """On validation failure, the existing sub-journal is restored."""
+        main = tmp_journal_with_includes
+        feb_file = main.parent / "2026-02.journal"
+        feb_original = feb_file.read_text()
+        main_original = main.read_text()
+
+        def _fail_check(file):
+            raise HledgerError("journal invalid")
+
+        monkeypatch.setattr("hledger_textual.journal.check_journal", _fail_check)
+
+        txn = _make_transaction("2026-02-20", "Coffee beans")
+        with pytest.raises(JournalError, match="validation failed"):
+            append_transaction(main, txn)
+
+        assert feb_file.read_text() == feb_original
+        assert main.read_text() == main_original
+        bak_files = list(main.parent.glob("*.bak"))
+        assert bak_files == []
+
+    def test_validation_failure_removes_new_subjournal(
+        self, tmp_journal_with_includes: Path, monkeypatch
+    ):
+        """On validation failure, the new sub-journal is removed and main is restored."""
+        main = tmp_journal_with_includes
+        main_original = main.read_text()
+        apr_file = main.parent / "2026-04.journal"
+
+        def _fail_check(file):
+            raise HledgerError("journal invalid")
+
+        monkeypatch.setattr("hledger_textual.journal.check_journal", _fail_check)
+
+        txn = _make_transaction("2026-04-10", "April groceries")
+        with pytest.raises(JournalError, match="validation failed"):
+            append_transaction(main, txn)
+
+        assert not apr_file.exists()
+        assert main.read_text() == main_original
+        bak_files = list(main.parent.glob("*.bak"))
+        assert bak_files == []
+
+    def test_routed_transaction_visible_via_hledger(self, tmp_journal_with_includes: Path):
+        """A routed transaction is visible via hledger print from the main journal."""
+        main = tmp_journal_with_includes
+        original_count = len(load_transactions(main))
+
+        txn = _make_transaction("2026-04-10", "April groceries")
+        append_transaction(main, txn)
+
+        all_txns = load_transactions(main)
+        assert len(all_txns) == original_count + 1
+        assert any(t.description == "April groceries" for t in all_txns)
