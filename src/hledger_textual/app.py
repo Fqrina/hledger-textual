@@ -139,27 +139,27 @@ class HledgerTuiApp(App):
         elif section == "recurring":
             self.query_one("#recurring-table", DataTable).focus()
 
+    def _refresh_all_panes(self) -> None:
+        """Silently reload every data pane after any journal mutation."""
+        summary = self.query_one(SummaryPane)
+        summary._load_static_data()
+        summary._load_breakdown_data()
+        self.query_one(TransactionsPane).reload()
+        self.query_one(AccountsPane)._load_balances()
+        self.query_one(BudgetPane)._load_budget_data()
+        self.query_one(ReportsPane)._load_report_data()
+
     def on_transactions_table_journal_changed(
         self, event: TransactionsTable.JournalChanged
     ) -> None:
         """Silently refresh all data panes after a journal mutation."""
-        summary = self.query_one(SummaryPane)
-        summary._load_static_data()
-        summary._load_breakdown_data()
-        self.query_one(AccountsPane)._load_balances()
-        self.query_one(BudgetPane)._load_budget_data()
-        self.query_one(ReportsPane)._load_report_data()
+        self._refresh_all_panes()
 
     def on_recurring_pane_journal_changed(
         self, event: RecurringPane.JournalChanged
     ) -> None:
         """Silently refresh all data panes after recurring transactions are generated."""
-        summary = self.query_one(SummaryPane)
-        summary._load_static_data()
-        summary._load_breakdown_data()
-        self.query_one(AccountsPane)._load_balances()
-        self.query_one(BudgetPane)._load_budget_data()
-        self.query_one(ReportsPane)._load_report_data()
+        self._refresh_all_panes()
 
     def action_switch_section(self, section: str) -> None:
         """Switch to the given section via keyboard shortcut (1-6)."""

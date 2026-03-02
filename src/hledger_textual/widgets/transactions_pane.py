@@ -78,6 +78,11 @@ class TransactionsPane(Widget):
     # Actions
     # ------------------------------------------------------------------
 
+    def reload(self) -> None:
+        """Silently reload transactions and summary (no notification)."""
+        self._table.reload()
+        self._load_summary(self._table.current_month)
+
     def action_refresh(self) -> None:
         """Reload transactions and summary from the journal."""
         self._table.do_refresh()
