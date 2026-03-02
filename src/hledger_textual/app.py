@@ -132,6 +132,17 @@ class HledgerTuiApp(App):
         elif section == "info":
             self.query_one(InfoPane).focus()
 
+    def on_transactions_table_journal_changed(
+        self, event: TransactionsTable.JournalChanged
+    ) -> None:
+        """Silently refresh all data panes after a journal mutation."""
+        summary = self.query_one(SummaryPane)
+        summary._load_static_data()
+        summary._load_breakdown_data()
+        self.query_one(AccountsPane)._load_balances()
+        self.query_one(BudgetPane)._load_budget_data()
+        self.query_one(ReportsPane)._load_report_data()
+
     def action_switch_section(self, section: str) -> None:
         """Switch to the given section via keyboard shortcut (1-6)."""
         self._activate_section(section)

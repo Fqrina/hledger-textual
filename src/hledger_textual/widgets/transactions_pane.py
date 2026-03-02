@@ -154,6 +154,12 @@ class TransactionsPane(Widget):
             append_transaction(self.journal_file, transaction)
             self.app.call_from_thread(self._table.reload)
             self.app.call_from_thread(self.notify, "Transaction added", timeout=3)
+            self.app.call_from_thread(
+                self._load_summary, self._table.current_month
+            )
+            self.app.call_from_thread(
+                self._table.post_message, TransactionsTable.JournalChanged()
+            )
         except JournalError as exc:
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8
