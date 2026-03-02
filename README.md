@@ -11,9 +11,9 @@ Built with [Textual](https://textual.textualize.io) and Python.
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/002" alt="Transactions" width="300"/></td>
-    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/003" alt="Transactions add - edit dialog" width="300"/></td>
-    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/004" alt="Reports with investment and charts" width="300"/></td>
+    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/003.png" alt="Transactions add - edit dialog" width="300"/></td>
+    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/004.png" alt="Reports with investment and charts" width="300"/></td>
+    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/002.png" alt="Transactions" width="300"/></td>
   </tr>
 </table>
 
