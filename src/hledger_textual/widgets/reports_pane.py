@@ -10,6 +10,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widget import Widget
+from rich.text import Text
 from textual.widgets import DataTable, Select
 
 from hledger_textual.config import load_default_commodity
@@ -216,11 +217,16 @@ class ReportsPane(Widget):
             elif row.is_total:
                 table.add_row(*empty_row)
 
-            account_text = row.account
             if row.is_section_header:
-                account_text = f"[bold cyan]{row.account}[/bold cyan]"
+                account_text = Text.from_markup(
+                    f"[bold cyan]{row.account}[/bold cyan]", emoji=False
+                )
             elif row.is_total:
-                account_text = f"[bold yellow]{row.account}[/bold yellow]"
+                account_text = Text.from_markup(
+                    f"[bold yellow]{row.account}[/bold yellow]", emoji=False
+                )
+            else:
+                account_text = Text(row.account)
 
             cells = [account_text]
             for amt in row.amounts:

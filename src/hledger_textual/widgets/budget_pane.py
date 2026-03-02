@@ -10,6 +10,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widget import Widget
+from rich.text import Text
 from textual.widgets import DataTable, Input, Static
 
 from hledger_textual.dateutil import next_month as _next_month
@@ -176,7 +177,7 @@ class BudgetPane(Widget):
                 usage_str = f"[green]{usage:.0f}%[/green]"
 
             table.add_row(
-                rule.account,
+                Text(rule.account),
                 budget_str,
                 actual_str,
                 remaining_str,

@@ -11,6 +11,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widget import Widget
+from rich.text import Text
 from textual.widgets import DataTable, Static
 
 from hledger_textual.config import load_price_tickers
@@ -445,7 +446,7 @@ class SummaryPane(Widget):
                 pct = float(qty / total_inc * 100) if total_inc else 0.0
                 bar = _progress_bar(pct, width=12)
                 itable.add_row(
-                    account,
+                    Text(account),
                     fmt_amount(qty, commodity),
                     f"{bar} {pct:.0f}%",
                 )
@@ -470,7 +471,7 @@ class SummaryPane(Widget):
             pct = float(qty / total_exp * 100) if total_exp else 0.0
             bar = _progress_bar(pct, width=12)
             table.add_row(
-                account,
+                Text(account),
                 fmt_amount(qty, commodity),
                 f"{bar} {pct:.0f}%",
             )

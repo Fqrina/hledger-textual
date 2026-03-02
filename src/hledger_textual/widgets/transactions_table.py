@@ -10,6 +10,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widget import Widget
+from rich.text import Text
 from textual.widgets import DataTable, Input, Static
 
 from hledger_textual.dateutil import next_month as _next_month
@@ -330,7 +331,7 @@ class TransactionsTable(Widget):
                 txn.date,
                 txn.status.symbol,
                 txn.description,
-                accounts,
+                Text(accounts),
                 txn.total_amount,
                 key=str(txn.index),
             )
