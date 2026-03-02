@@ -120,13 +120,9 @@ def git_sync(journal_file: Path) -> str:
     """
     cwd = journal_file.parent
 
-    # Stage journal file
-    run_git("add", str(journal_file), cwd=cwd)
-
-    # Stage budget file if it exists alongside
-    budget_file = cwd / "budget.journal"
-    if budget_file.exists():
-        run_git("add", str(budget_file), cwd=cwd)
+    # Stage all journal files in the repository
+    for journal in cwd.rglob("*.journal"):
+        run_git("add", str(journal), cwd=cwd)
 
     # Check if there is anything to commit
     committed = False
