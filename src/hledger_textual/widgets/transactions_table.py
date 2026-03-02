@@ -10,6 +10,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widget import Widget
+from rich.text import Text
 from textual.widgets import DataTable, Input, Static
 
 from hledger_textual.dateutil import next_month as _next_month
@@ -135,8 +136,9 @@ class TransactionsTable(Widget):
                 )
         yield DataTable(id="transactions-table")
 
-    # Date, Status, Accounts, Amount fixed; Description flex
-    _TXN_FIXED = {0: 12, 1: 8, 3: 30, 4: 22}
+    # Date, Status, Amount fixed; Description and Accounts flex
+    _TXN_FIXED = {0: 12, 1: 8, 4: 22}
+    _TXN_FLEX = {2: 2, 3: 3}  # Accounts gets more space than Description
 
     def on_mount(self) -> None:
         """Set up the DataTable columns and start loading."""
@@ -146,7 +148,7 @@ class TransactionsTable(Widget):
         table.add_column("Date", width=self._TXN_FIXED[0])
         table.add_column("Status", width=self._TXN_FIXED[1])
         table.add_column("Description", width=20)
-        table.add_column("Accounts", width=self._TXN_FIXED[3])
+        table.add_column("Accounts", width=20)
         table.add_column("Amount", width=self._TXN_FIXED[4])
         self._load_transactions()
         table.focus()
@@ -158,7 +160,7 @@ class TransactionsTable(Widget):
     def on_resize(self) -> None:
         """Recalculate column widths when the widget is resized."""
         table = self.query_one(DataTable)
-        distribute_column_widths(table, self._TXN_FIXED)
+        distribute_column_widths(table, self._TXN_FIXED, self._TXN_FLEX)
 
     # ------------------------------------------------------------------
     # Public interface (for parent widgets / screens)
@@ -335,12 +337,12 @@ class TransactionsTable(Widget):
                 txn.date,
                 txn.status.symbol,
                 txn.description,
-                accounts,
+                Text(accounts),
                 txn.total_amount,
                 key=str(txn.index),
             )
         table = self.query_one(DataTable)
-        distribute_column_widths(table, self._TXN_FIXED)
+        distribute_column_widths(table, self._TXN_FIXED, self._TXN_FLEX)
 
     # ------------------------------------------------------------------
     # Event handlers

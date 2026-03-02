@@ -9,6 +9,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widget import Widget
+from rich.text import Text
 from textual.widgets import DataTable, Input
 
 from hledger_textual.hledger import HledgerError, load_account_balances
@@ -89,7 +90,7 @@ class AccountsPane(Widget):
             if prev_group and group != prev_group:
                 table.add_row("", "", key=f"{self._SEP_KEY_PREFIX}{sep_idx}")
             prev_group = group
-            table.add_row(account, balance, key=account)
+            table.add_row(Text(account), balance, key=account)
 
     def _filtered_balances(self) -> list[tuple[str, str]]:
         """Return balances filtered by the current filter text."""
