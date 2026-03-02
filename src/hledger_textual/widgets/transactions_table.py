@@ -272,12 +272,11 @@ class TransactionsTable(Widget):
 
     @work(thread=True)
     def _do_replace(self, original: Transaction, updated: Transaction) -> None:
-        """Replace a transaction in the journal and reload."""
+        """Replace a transaction in the journal and emit JournalChanged."""
         from hledger_textual.journal import JournalError, replace_transaction
 
         try:
             replace_transaction(self.journal_file, original, updated)
-            self.app.call_from_thread(self.reload)
             self.app.call_from_thread(self.notify, "Transaction updated", timeout=3)
             self.app.call_from_thread(self.post_message, self.JournalChanged())
         except JournalError as exc:
@@ -287,12 +286,11 @@ class TransactionsTable(Widget):
 
     @work(thread=True)
     def _do_delete(self, transaction: Transaction) -> None:
-        """Delete a transaction from the journal and reload."""
+        """Delete a transaction from the journal and emit JournalChanged."""
         from hledger_textual.journal import JournalError, delete_transaction
 
         try:
             delete_transaction(self.journal_file, transaction)
-            self.app.call_from_thread(self.reload)
             self.app.call_from_thread(self.notify, "Transaction deleted", timeout=3)
             self.app.call_from_thread(self.post_message, self.JournalChanged())
         except JournalError as exc:
