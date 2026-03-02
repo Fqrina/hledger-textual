@@ -10,6 +10,7 @@ All write operations follow a safe pattern:
 from __future__ import annotations
 
 import re
+from enum import Enum, auto
 from pathlib import Path
 
 from hledger_textual.fileutil import backup as _backup
@@ -22,6 +23,18 @@ from hledger_textual.models import Transaction
 _DATE_INCLUDE_RE = re.compile(
     r"^\s*include\s+(\d{4}-\d{2}\.journal)\s*$", re.MULTILINE
 )
+
+_GLOB_INCLUDE_RE = re.compile(
+    r"^\s*include\s+(\d{4})/\*\.journal\s*$", re.MULTILINE
+)
+
+
+class RoutingStrategy(Enum):
+    """How new transactions are routed to sub-journals."""
+
+    GLOB = auto()       # include YYYY/*.journal
+    FLAT = auto()       # include YYYY-MM.journal
+    FALLBACK = auto()   # no date-based includes
 
 
 class JournalError(Exception):
@@ -41,6 +54,66 @@ def _find_date_includes(content: str) -> list[str]:
         List of matched filenames, or empty list if none found.
     """
     return _DATE_INCLUDE_RE.findall(content)
+
+
+def _find_glob_includes(content: str) -> list[str]:
+    """Return year strings from glob-based include directives.
+
+    Matches lines like ``include 2026/*.journal`` and returns a list of
+    the year strings (e.g. ``["2026"]``).
+
+    Args:
+        content: The text content of a journal file.
+
+    Returns:
+        List of matched year strings, or empty list if none found.
+    """
+    return _GLOB_INCLUDE_RE.findall(content)
+
+
+def _detect_routing_strategy(content: str) -> tuple[RoutingStrategy, list[str]]:
+    """Detect which routing strategy the journal uses.
+
+    Checks for glob-based includes first (highest priority), then flat
+    date-based includes, then falls back to direct append.
+
+    Args:
+        content: The text content of the main journal file.
+
+    Returns:
+        A tuple of (strategy, matches) where matches is:
+        - For GLOB: list of year strings (e.g. ``["2026"]``)
+        - For FLAT: list of filenames (e.g. ``["2026-01.journal"]``)
+        - For FALLBACK: empty list
+    """
+    glob_years = _find_glob_includes(content)
+    if glob_years:
+        return RoutingStrategy.GLOB, glob_years
+
+    date_includes = _find_date_includes(content)
+    if date_includes:
+        return RoutingStrategy.FLAT, date_includes
+
+    return RoutingStrategy.FALLBACK, []
+
+
+def _glob_target_path(
+    main_journal: Path, transaction: Transaction
+) -> tuple[Path, str]:
+    """Derive the target file path and year for glob-based routing.
+
+    Args:
+        main_journal: Path to the main journal file.
+        transaction: The transaction to route.
+
+    Returns:
+        A tuple of (target_path, year_string), e.g.
+        ``(Path(".../2026/03.journal"), "2026")``.
+    """
+    year = transaction.date[:4]
+    month = transaction.date[5:7]
+    target = main_journal.parent / year / f"{month}.journal"
+    return target, year
 
 
 def _target_subjournal_name(transaction: Transaction) -> str:
@@ -97,6 +170,54 @@ def _insert_include_sorted(content: str, new_include: str) -> str:
         insert_idx = last_line_idx + 1
 
     # Ensure the new line has a trailing newline
+    new_entry = new_line + "\n"
+    lines.insert(insert_idx, new_entry)
+    return "".join(lines)
+
+
+def _insert_glob_include_sorted(content: str, new_include: str) -> str:
+    """Insert a glob-based include directive in sorted order.
+
+    Finds existing glob-based ``include`` lines (e.g. ``include 2026/*.journal``)
+    and inserts the new one so that all glob includes remain sorted.
+
+    Args:
+        content: The current journal file content.
+        new_include: The glob pattern to include (e.g. ``"2027/*.journal"``).
+
+    Returns:
+        Updated content with the new include directive inserted.
+    """
+    new_line = f"include {new_include}"
+    lines = content.splitlines(keepends=True)
+    # Find positions and values of existing glob-based includes
+    glob_positions: list[tuple[int, str]] = []
+    for i, line in enumerate(lines):
+        m = _GLOB_INCLUDE_RE.match(line)
+        if m:
+            glob_positions.append((i, m.group(1)))
+
+    if not glob_positions:
+        # No existing glob includes — append at end
+        if content and not content.endswith("\n"):
+            return content + "\n" + new_line + "\n"
+        return content + new_line + "\n"
+
+    # Extract the year from the new include for comparison
+    new_year = new_include.split("/")[0]
+
+    # Find insertion point: before the first include whose year sorts after new_year
+    insert_idx = None
+    for pos_idx, (line_idx, year) in enumerate(glob_positions):
+        if new_year < year:
+            insert_idx = line_idx
+            break
+
+    if insert_idx is None:
+        # New include goes after the last glob-based include
+        last_line_idx = glob_positions[-1][0]
+        insert_idx = last_line_idx + 1
+
     new_entry = new_line + "\n"
     lines.insert(insert_idx, new_entry)
     return "".join(lines)
@@ -216,17 +337,107 @@ def _append_to_new_subjournal(
         raise JournalError(f"Failed to append transaction: {exc}")
 
 
+def _append_to_new_glob_subjournal(
+    main_journal: Path,
+    target_file: Path,
+    transaction: Transaction,
+) -> None:
+    """Create a new month file in an existing year directory.
+
+    The glob include already covers new files, so the main journal
+    is not modified.
+
+    Args:
+        main_journal: Path to the top-level journal file (for validation).
+        target_file: Path to the new month file to create.
+        transaction: The transaction to write.
+
+    Raises:
+        JournalError: If validation fails (new file is removed).
+    """
+    try:
+        target_file.write_text(format_transaction(transaction) + "\n")
+        check_journal(main_journal)
+    except HledgerError as exc:
+        if target_file.exists():
+            target_file.unlink()
+        raise JournalError(f"Journal validation failed, changes reverted: {exc}")
+    except Exception as exc:
+        if target_file.exists():
+            target_file.unlink()
+        raise JournalError(f"Failed to append transaction: {exc}")
+
+
+def _append_to_new_glob_year(
+    main_journal: Path,
+    target_file: Path,
+    year: str,
+    transaction: Transaction,
+) -> None:
+    """Create a new year directory, add a glob include, and write the transaction.
+
+    Handles the multi-step operation:
+    1. Backup the main journal.
+    2. Insert ``include YYYY/*.journal`` in sorted order in the main journal.
+    3. Create the year directory.
+    4. Create the month file with the transaction.
+    5. Validate via the main journal.
+    6. On failure: restore main, delete month file, remove year dir if empty.
+
+    Args:
+        main_journal: Path to the top-level journal file.
+        target_file: Path to the new month file (e.g. ``2027/01.journal``).
+        year: The year string (e.g. ``"2027"``).
+        transaction: The transaction to write.
+
+    Raises:
+        JournalError: If validation fails (all changes reverted).
+    """
+    main_backup = _backup(main_journal)
+    year_dir = main_journal.parent / year
+    year_dir_created = not year_dir.exists()
+
+    try:
+        # Insert the glob include directive in sorted order
+        main_content = main_journal.read_text()
+        new_include = f"{year}/*.journal"
+        main_content = _insert_glob_include_sorted(main_content, new_include)
+        main_journal.write_text(main_content)
+
+        # Create the year directory and month file
+        year_dir.mkdir(exist_ok=True)
+        target_file.write_text(format_transaction(transaction) + "\n")
+
+        _validate_and_finalize(main_journal, main_journal, main_backup)
+    except JournalError:
+        # _validate_and_finalize already restored main from backup;
+        # clean up the newly created files.
+        if target_file.exists():
+            target_file.unlink()
+        if year_dir_created and year_dir.exists() and not any(year_dir.iterdir()):
+            year_dir.rmdir()
+        raise
+    except Exception as exc:
+        _restore(main_journal, main_backup)
+        _cleanup_backup(main_backup)
+        if target_file.exists():
+            target_file.unlink()
+        if year_dir_created and year_dir.exists() and not any(year_dir.iterdir()):
+            year_dir.rmdir()
+        raise JournalError(f"Failed to append transaction: {exc}")
+
+
 def append_transaction(file: str | Path, transaction: Transaction) -> None:
     """Append a new transaction to the journal.
 
-    If the main journal contains date-based ``include`` directives
-    (e.g. ``include 2026-01.journal``), the transaction is routed to the
-    matching sub-journal.  If no sub-journal exists for the transaction's
-    month, a new one is created and its ``include`` directive is added in
-    sorted order.
+    Supports three routing strategies (auto-detected):
 
-    When no date-based includes are present, the transaction is appended
-    directly to the main journal file (legacy behaviour).
+    - **Glob**: ``include YYYY/*.journal`` — routes to ``YYYY/MM.journal``
+      sub-journals inside year directories.
+    - **Flat**: ``include YYYY-MM.journal`` — routes to ``YYYY-MM.journal``
+      sub-journals alongside the main journal.
+    - **Fallback**: no date-based includes — appends directly to the main
+      journal file.
 
     Args:
         file: Path to the journal file.
@@ -237,19 +448,31 @@ def append_transaction(file: str | Path, transaction: Transaction) -> None:
     """
     main_journal = Path(file)
     main_content = main_journal.read_text()
-    date_includes = _find_date_includes(main_content)
+    strategy, matches = _detect_routing_strategy(main_content)
 
-    if not date_includes:
+    if strategy == RoutingStrategy.FALLBACK:
         _append_to_file(main_journal, main_journal, transaction)
         return
 
-    target_name = _target_subjournal_name(transaction)
-    target_file = main_journal.parent / target_name
+    if strategy == RoutingStrategy.FLAT:
+        target_name = _target_subjournal_name(transaction)
+        target_file = main_journal.parent / target_name
+        if target_name in matches:
+            _append_to_file(main_journal, target_file, transaction)
+        else:
+            _append_to_new_subjournal(
+                main_journal, target_file, target_name, transaction
+            )
+        return
 
-    if target_name in date_includes:
+    # GLOB strategy
+    target_file, year = _glob_target_path(main_journal, transaction)
+    if target_file.exists():
         _append_to_file(main_journal, target_file, transaction)
+    elif year in matches:
+        _append_to_new_glob_subjournal(main_journal, target_file, transaction)
     else:
-        _append_to_new_subjournal(main_journal, target_file, target_name, transaction)
+        _append_to_new_glob_year(main_journal, target_file, year, transaction)
 
 
 def replace_transaction(

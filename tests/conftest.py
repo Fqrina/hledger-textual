@@ -137,6 +137,18 @@ def tmp_journal_with_includes(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def tmp_journal_with_glob_includes(tmp_path: Path) -> Path:
+    """A temporary multi-file journal setup with glob-based include directives."""
+    src = FIXTURES_DIR / "glob_includes"
+    for f in src.iterdir():
+        if f.is_file():
+            shutil.copy2(f, tmp_path / f.name)
+        elif f.is_dir():
+            shutil.copytree(f, tmp_path / f.name)
+    return tmp_path / "main.journal"
+
+
+@pytest.fixture
 def sample_budget_rule(euro_style: AmountStyle) -> BudgetRule:
     """A sample budget rule for testing."""
     return BudgetRule(

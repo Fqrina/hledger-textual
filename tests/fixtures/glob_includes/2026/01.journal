@@ -1,0 +1,7 @@
+2026-01-15 * Grocery shopping
+    expenses:food:groceries              €40.80
+    assets:bank:checking
+
+2026-01-16 Salary
+    assets:bank:checking               €3000.00
+    income:salary

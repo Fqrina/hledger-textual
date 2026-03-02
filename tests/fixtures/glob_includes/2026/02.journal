@@ -1,0 +1,7 @@
+2026-02-01 Rent payment
+    expenses:rent                       €800.00
+    assets:bank:checking
+
+2026-02-15 Electricity bill
+    expenses:utilities                   €85.00
+    assets:bank:checking

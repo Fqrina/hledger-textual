@@ -8,7 +8,11 @@ from decimal import Decimal
 
 from hledger_textual.journal import (
     JournalError,
+    RoutingStrategy,
+    _detect_routing_strategy,
     _find_date_includes,
+    _find_glob_includes,
+    _insert_glob_include_sorted,
     _insert_include_sorted,
     _target_subjournal_name,
     append_transaction,
@@ -616,3 +620,330 @@ class TestAppendTransactionRouting:
         all_txns = load_transactions(main)
         assert len(all_txns) == original_count + 1
         assert any(t.description == "April groceries" for t in all_txns)
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for glob routing helpers (no hledger required)
+# ---------------------------------------------------------------------------
+
+
+class TestDetectRoutingStrategy:
+    """Tests for _detect_routing_strategy."""
+
+    def test_detects_glob_strategy(self):
+        content = "include budget.journal\n\ninclude 2026/*.journal\n"
+        strategy, matches = _detect_routing_strategy(content)
+        assert strategy == RoutingStrategy.GLOB
+        assert matches == ["2026"]
+
+    def test_detects_flat_strategy(self):
+        content = "include 2026-01.journal\ninclude 2026-02.journal\n"
+        strategy, matches = _detect_routing_strategy(content)
+        assert strategy == RoutingStrategy.FLAT
+        assert matches == ["2026-01.journal", "2026-02.journal"]
+
+    def test_detects_fallback_strategy(self):
+        content = "include budget.journal\n\n2026-01-01 Test\n    expenses  €10\n    assets\n"
+        strategy, matches = _detect_routing_strategy(content)
+        assert strategy == RoutingStrategy.FALLBACK
+        assert matches == []
+
+    def test_empty_content(self):
+        strategy, matches = _detect_routing_strategy("")
+        assert strategy == RoutingStrategy.FALLBACK
+        assert matches == []
+
+    def test_glob_priority_over_flat(self):
+        """When both glob and flat includes exist, glob wins."""
+        content = (
+            "include 2026/*.journal\n"
+            "include 2025-12.journal\n"
+        )
+        strategy, matches = _detect_routing_strategy(content)
+        assert strategy == RoutingStrategy.GLOB
+        assert "2026" in matches
+
+    def test_leading_whitespace_glob(self):
+        content = "  include 2026/*.journal\n"
+        strategy, matches = _detect_routing_strategy(content)
+        assert strategy == RoutingStrategy.GLOB
+        assert matches == ["2026"]
+
+    def test_multiple_glob_years(self):
+        content = "include 2025/*.journal\ninclude 2026/*.journal\n"
+        strategy, matches = _detect_routing_strategy(content)
+        assert strategy == RoutingStrategy.GLOB
+        assert matches == ["2025", "2026"]
+
+
+class TestInsertGlobIncludeSorted:
+    """Tests for _insert_glob_include_sorted."""
+
+    def test_insert_at_end(self):
+        content = "include 2025/*.journal\ninclude 2026/*.journal\n"
+        result = _insert_glob_include_sorted(content, "2027/*.journal")
+        assert result == (
+            "include 2025/*.journal\n"
+            "include 2026/*.journal\n"
+            "include 2027/*.journal\n"
+        )
+
+    def test_insert_at_beginning(self):
+        content = "include 2026/*.journal\ninclude 2027/*.journal\n"
+        result = _insert_glob_include_sorted(content, "2025/*.journal")
+        assert result == (
+            "include 2025/*.journal\n"
+            "include 2026/*.journal\n"
+            "include 2027/*.journal\n"
+        )
+
+    def test_insert_in_middle(self):
+        content = "include 2025/*.journal\ninclude 2027/*.journal\n"
+        result = _insert_glob_include_sorted(content, "2026/*.journal")
+        assert result == (
+            "include 2025/*.journal\n"
+            "include 2026/*.journal\n"
+            "include 2027/*.journal\n"
+        )
+
+    def test_no_existing_globs(self):
+        content = "include budget.journal\n"
+        result = _insert_glob_include_sorted(content, "2026/*.journal")
+        assert result == "include budget.journal\ninclude 2026/*.journal\n"
+
+    def test_preserves_non_glob_content(self):
+        content = (
+            "; Main journal\n"
+            "\n"
+            "include budget.journal\n"
+            "\n"
+            "include 2026/*.journal\n"
+        )
+        result = _insert_glob_include_sorted(content, "2027/*.journal")
+        assert "include 2027/*.journal\n" in result
+        assert "; Main journal\n" in result
+        assert "include budget.journal\n" in result
+
+
+# ---------------------------------------------------------------------------
+# Integration tests for glob-based append_transaction routing
+# ---------------------------------------------------------------------------
+
+
+class TestAppendTransactionGlobRouting:
+    """Tests for append_transaction's glob-based sub-journal routing."""
+
+    def test_routes_to_existing_month_file(self, tmp_journal_with_glob_includes: Path):
+        """A Feb transaction is routed to the existing 2026/02.journal."""
+        main = tmp_journal_with_glob_includes
+        main_original = main.read_text()
+        feb_file = main.parent / "2026" / "02.journal"
+
+        txn = _make_transaction("2026-02-20", "Coffee beans")
+        append_transaction(main, txn)
+
+        # Main journal must not be modified
+        assert main.read_text() == main_original
+        # Transaction should be in the Feb sub-journal
+        assert "Coffee beans" in feb_file.read_text()
+        # Visible via hledger
+        all_txns = load_transactions(main)
+        assert any(t.description == "Coffee beans" for t in all_txns)
+
+    def test_creates_new_month_file_in_existing_year(
+        self, tmp_journal_with_glob_includes: Path
+    ):
+        """An Apr transaction creates 2026/04.journal; main unchanged (glob covers it)."""
+        main = tmp_journal_with_glob_includes
+        main_original = main.read_text()
+        apr_file = main.parent / "2026" / "04.journal"
+        assert not apr_file.exists()
+
+        txn = _make_transaction("2026-04-10", "April groceries")
+        append_transaction(main, txn)
+
+        assert apr_file.exists()
+        assert "April groceries" in apr_file.read_text()
+        # Main journal must NOT be modified — glob already covers new files
+        assert main.read_text() == main_original
+
+    def test_creates_new_year_dir_and_glob_include(
+        self, tmp_journal_with_glob_includes: Path
+    ):
+        """A 2027 transaction creates 2027/ dir, 2027/01.journal, and adds include."""
+        main = tmp_journal_with_glob_includes
+        year_dir = main.parent / "2027"
+        jan_file = year_dir / "01.journal"
+        assert not year_dir.exists()
+
+        txn = _make_transaction("2027-01-15", "New year groceries")
+        append_transaction(main, txn)
+
+        assert year_dir.is_dir()
+        assert jan_file.exists()
+        assert "New year groceries" in jan_file.read_text()
+        assert "include 2027/*.journal" in main.read_text()
+
+    def test_new_glob_include_is_sorted(self, tmp_journal_with_glob_includes: Path):
+        """The new glob include directive is inserted in sorted order."""
+        main = tmp_journal_with_glob_includes
+
+        txn = _make_transaction("2027-01-15", "New year groceries")
+        append_transaction(main, txn)
+
+        glob_years = _find_glob_includes(main.read_text())
+        assert glob_years == ["2026", "2027"]
+
+    def test_no_backup_left_routing_existing_month(
+        self, tmp_journal_with_glob_includes: Path
+    ):
+        """No .bak files remain after routing to an existing month file."""
+        main = tmp_journal_with_glob_includes
+        txn = _make_transaction("2026-02-20", "Coffee beans")
+        append_transaction(main, txn)
+
+        bak_files = list(main.parent.rglob("*.bak"))
+        assert bak_files == []
+
+    def test_no_backup_left_creating_new_month(
+        self, tmp_journal_with_glob_includes: Path
+    ):
+        """No .bak files remain after creating a new month file."""
+        main = tmp_journal_with_glob_includes
+        txn = _make_transaction("2026-04-10", "April groceries")
+        append_transaction(main, txn)
+
+        bak_files = list(main.parent.rglob("*.bak"))
+        assert bak_files == []
+
+    def test_no_backup_left_creating_new_year(
+        self, tmp_journal_with_glob_includes: Path
+    ):
+        """No .bak files remain after creating a new year directory."""
+        main = tmp_journal_with_glob_includes
+        txn = _make_transaction("2027-01-15", "New year groceries")
+        append_transaction(main, txn)
+
+        bak_files = list(main.parent.rglob("*.bak"))
+        assert bak_files == []
+
+    def test_validation_failure_restores_existing_month(
+        self, tmp_journal_with_glob_includes: Path, monkeypatch
+    ):
+        """On validation failure, the existing month file is restored."""
+        main = tmp_journal_with_glob_includes
+        feb_file = main.parent / "2026" / "02.journal"
+        feb_original = feb_file.read_text()
+        main_original = main.read_text()
+
+        def _fail_check(file):
+            raise HledgerError("journal invalid")
+
+        monkeypatch.setattr("hledger_textual.journal.check_journal", _fail_check)
+
+        txn = _make_transaction("2026-02-20", "Coffee beans")
+        with pytest.raises(JournalError, match="validation failed"):
+            append_transaction(main, txn)
+
+        assert feb_file.read_text() == feb_original
+        assert main.read_text() == main_original
+        bak_files = list(main.parent.rglob("*.bak"))
+        assert bak_files == []
+
+    def test_validation_failure_removes_new_month_file(
+        self, tmp_journal_with_glob_includes: Path, monkeypatch
+    ):
+        """On validation failure, the new month file is removed."""
+        main = tmp_journal_with_glob_includes
+        main_original = main.read_text()
+        apr_file = main.parent / "2026" / "04.journal"
+
+        def _fail_check(file):
+            raise HledgerError("journal invalid")
+
+        monkeypatch.setattr("hledger_textual.journal.check_journal", _fail_check)
+
+        txn = _make_transaction("2026-04-10", "April groceries")
+        with pytest.raises(JournalError, match="validation failed"):
+            append_transaction(main, txn)
+
+        assert not apr_file.exists()
+        # Main journal must not be modified (glob already covers new files)
+        assert main.read_text() == main_original
+
+    def test_validation_failure_reverts_new_year(
+        self, tmp_journal_with_glob_includes: Path, monkeypatch
+    ):
+        """On validation failure, new year dir is removed and main is restored."""
+        main = tmp_journal_with_glob_includes
+        main_original = main.read_text()
+        year_dir = main.parent / "2027"
+
+        def _fail_check(file):
+            raise HledgerError("journal invalid")
+
+        monkeypatch.setattr("hledger_textual.journal.check_journal", _fail_check)
+
+        txn = _make_transaction("2027-01-15", "New year groceries")
+        with pytest.raises(JournalError, match="validation failed"):
+            append_transaction(main, txn)
+
+        assert not year_dir.exists()
+        assert main.read_text() == main_original
+        bak_files = list(main.parent.rglob("*.bak"))
+        assert bak_files == []
+
+    def test_routed_transaction_visible_via_hledger(
+        self, tmp_journal_with_glob_includes: Path
+    ):
+        """A routed transaction is visible via hledger print from the main journal."""
+        main = tmp_journal_with_glob_includes
+        original_count = len(load_transactions(main))
+
+        txn = _make_transaction("2026-04-10", "April groceries")
+        append_transaction(main, txn)
+
+        all_txns = load_transactions(main)
+        assert len(all_txns) == original_count + 1
+        assert any(t.description == "April groceries" for t in all_txns)
+
+
+class TestGlobSubJournalOperations:
+    """Tests for replace/delete on transactions living in glob sub-journals."""
+
+    def test_replace_in_glob_sub_journal(
+        self, tmp_journal_with_glob_includes: Path, new_transaction: Transaction
+    ):
+        """Replace a transaction in a glob sub-journal; main journal stays untouched."""
+        main = tmp_journal_with_glob_includes
+        main_original = main.read_text()
+        txns = load_transactions(main)
+        original_count = len(txns)
+
+        jan_txn = next(t for t in txns if t.description == "Grocery shopping")
+
+        replace_transaction(main, jan_txn, new_transaction)
+
+        updated = load_transactions(main)
+        assert len(updated) == original_count
+        descriptions = [t.description for t in updated]
+        assert "Rent payment" in descriptions
+        assert "Grocery shopping" not in descriptions
+        assert main.read_text() == main_original
+
+    def test_delete_from_glob_sub_journal(self, tmp_journal_with_glob_includes: Path):
+        """Delete a transaction from a glob sub-journal; main journal stays untouched."""
+        main = tmp_journal_with_glob_includes
+        main_original = main.read_text()
+        txns = load_transactions(main)
+        original_count = len(txns)
+
+        feb_txn = next(t for t in txns if t.description == "Electricity bill")
+
+        delete_transaction(main, feb_txn)
+
+        updated = load_transactions(main)
+        assert len(updated) == original_count - 1
+        descriptions = [t.description for t in updated]
+        assert "Electricity bill" not in descriptions
+        assert main.read_text() == main_original
