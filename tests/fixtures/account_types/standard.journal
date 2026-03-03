@@ -1,0 +1,18 @@
+; Scenario: Standard account names (income:* / expenses:*)
+; hledger auto-detects types from the name prefix
+
+2026-03-01 Salary
+    assets:bank:checking       €3000.00
+    income:salary
+
+2026-03-02 Freelance work
+    assets:bank:checking       €500.00
+    income:freelance
+
+2026-03-05 Groceries
+    expenses:food:groceries    €120.00
+    assets:bank:checking
+
+2026-03-10 Electricity bill
+    expenses:utilities         €80.00
+    assets:bank:checking
