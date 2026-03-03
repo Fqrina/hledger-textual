@@ -54,7 +54,7 @@ class RecurringPane(Widget):
         self._recurring_path: Path | None = None
         self._rules: list[RecurringRule] = []
 
-    _RECURRING_FIXED = {2: 12, 3: 20, 4: 10}
+    _RECURRING_FIXED = {0: 12, 2: 10}
 
     def compose(self) -> ComposeResult:
         """Create the pane layout."""
@@ -64,7 +64,6 @@ class RecurringPane(Widget):
         """Set up the DataTable and load recurring rules."""
         table = self.query_one("#recurring-table", DataTable)
         table.cursor_type = "row"
-        table.add_column("ID", width=20)
         table.add_column("Period", width=12)
         table.add_column("Description", width=20)
         table.add_column("Start", width=10)
@@ -103,7 +102,7 @@ class RecurringPane(Widget):
         if not self._rules:
             table.add_row(
                 "No recurring rules. Press [a] to add one.",
-                "", "", "", "",
+                "", "", "",
             )
             return
 
@@ -112,7 +111,6 @@ class RecurringPane(Widget):
                 p.account for p in rule.postings if p.account
             )
             table.add_row(
-                rule.rule_id,
                 rule.period_expr,
                 rule.description,
                 rule.start_date or "",

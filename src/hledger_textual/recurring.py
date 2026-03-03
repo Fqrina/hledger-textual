@@ -19,7 +19,7 @@ from pathlib import Path
 from hledger_textual.fileutil import backup as _backup
 from hledger_textual.fileutil import cleanup_backup as _cleanup_backup
 from hledger_textual.fileutil import restore as _restore
-from hledger_textual.hledger import HledgerError, check_journal, load_transactions
+from hledger_textual.hledger import HledgerError, check_journal, load_transactions, run_hledger
 from hledger_textual.journal import JournalError, append_transaction
 from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, Transaction
 
@@ -463,6 +463,93 @@ def _generate_occurrences(start: date, period: str, end: date) -> list[date]:
     return dates
 
 
+def validate_period_expr(expr: str) -> bool:
+    """Check whether an hledger period expression is syntactically valid.
+
+    Creates a temporary journal with a minimal periodic transaction using the
+    given expression and runs ``hledger print --forecast`` to validate.
+
+    Args:
+        expr: The period expression to validate (e.g. ``"every 2 weeks"``).
+
+    Returns:
+        ``True`` if hledger accepts the expression, ``False`` otherwise.
+    """
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_journal = Path(tmpdir) / "test.journal"
+        temp_journal.write_text(
+            f"~ {expr}\n"
+            "    expenses:test    €1.00\n"
+            "    assets:test\n"
+        )
+        try:
+            run_hledger(
+                "print",
+                "--forecast=2000-01-01..2000-12-31",
+                "-O", "json",
+                file=temp_journal,
+            )
+            return True
+        except HledgerError:
+            return False
+
+
+def _get_occurrence_dates_hledger(
+    rule: RecurringRule,
+    start: date,
+    end: date,
+) -> list[date]:
+    """Generate occurrence dates for a custom period expression using hledger --forecast.
+
+    Creates a minimal temporary journal containing only the periodic transaction
+    for the given rule, then runs ``hledger print --forecast`` to obtain the
+    dates that hledger would generate within ``[start, end]``.
+
+    Args:
+        rule: The recurring rule with a custom period expression.
+        start: The start date (inclusive).
+        end: The end date (inclusive).
+
+    Returns:
+        List of dates on which the rule fires between *start* and *end*.
+    """
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_journal = Path(tmpdir) / "forecast.journal"
+        temp_journal.write_text(
+            f"~ {rule.period_expr} from {start.isoformat()}\n"
+            "    expenses:test    €1.00\n"
+            "    assets:test\n"
+        )
+        forecast_range = f"{start.isoformat()}..{end.isoformat()}"
+        try:
+            output = run_hledger(
+                "print",
+                f"--forecast={forecast_range}",
+                "-O", "json",
+                file=temp_journal,
+            )
+            if not output.strip():
+                return []
+            data = json.loads(output)
+            result: list[date] = []
+            for txn in data:
+                raw_date = txn.get("tdate", "")
+                if raw_date:
+                    try:
+                        result.append(date.fromisoformat(raw_date))
+                    except ValueError:
+                        pass
+            return result
+        except (HledgerError, json.JSONDecodeError):
+            return []
+
+
 def compute_pending(
     rule: RecurringRule,
     journal_file: Path,
@@ -496,7 +583,10 @@ def compute_pending(
         except ValueError:
             pass
 
-    all_dates = _generate_occurrences(start, rule.period_expr, end)
+    if rule.period_expr in SUPPORTED_PERIODS:
+        all_dates = _generate_occurrences(start, rule.period_expr, end)
+    else:
+        all_dates = _get_occurrence_dates_hledger(rule, start, end)
 
     # Load already-generated transactions tagged with this rule's ID
     try:

@@ -8,6 +8,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -17,13 +18,13 @@ from textual.widgets import Button, Input, Label, Select, Static
 from hledger_textual.config import load_default_commodity
 from hledger_textual.hledger import HledgerError, load_accounts
 from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, TransactionStatus
-from hledger_textual.recurring import SUPPORTED_PERIODS
+from hledger_textual.recurring import SUPPORTED_PERIODS, validate_period_expr
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-_PERIOD_OPTIONS = [(p.capitalize(), p) for p in SUPPORTED_PERIODS]
+_PERIOD_OPTIONS = [(p.capitalize(), p) for p in SUPPORTED_PERIODS] + [("Custom", "custom")]
 
 
 def _slugify(text: str) -> str:
@@ -76,6 +77,14 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
         title = "Edit Recurring Rule" if self.is_edit else "New Recurring Rule"
         r = self.rule
 
+        # Determine initial period selection and custom expression
+        if r and r.period_expr not in SUPPORTED_PERIODS:
+            initial_period = "custom"
+            initial_custom = r.period_expr
+        else:
+            initial_period = r.period_expr if r else "monthly"
+            initial_custom = ""
+
         with Vertical(id="form-dialog"):
             yield Static(title, id="form-title")
 
@@ -90,11 +99,18 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
 
                 with Horizontal(classes="form-field"):
                     yield Label("Period:")
-                    initial_period = r.period_expr if r else "monthly"
                     yield Select(
                         options=_PERIOD_OPTIONS,
                         value=initial_period,
                         id="recurring-select-period",
+                    )
+
+                with Horizontal(classes="form-field", id="recurring-custom-period-row"):
+                    yield Label("Expression:")
+                    yield Input(
+                        value=initial_custom,
+                        placeholder="e.g. every 2 weeks",
+                        id="recurring-input-custom-period",
                     )
 
                 with Horizontal(classes="form-field"):
@@ -129,6 +145,11 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
             self.accounts = load_accounts(self.journal_file)
         except HledgerError:
             self.accounts = []
+
+        # Hide custom expression row unless the period is already "custom"
+        period_select = self.query_one("#recurring-select-period", Select)
+        if period_select.value != "custom":
+            self.query_one("#recurring-custom-period-row").display = False
 
         if self.is_edit and self.rule:
             for i, posting in enumerate(self.rule.postings):
@@ -181,6 +202,12 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
         else:
             self.notify("Minimum 2 postings required", severity="warning", timeout=3)
 
+    @on(Select.Changed, "#recurring-select-period")
+    def on_recurring_select_period_changed(self, event: Select.Changed) -> None:
+        """Show or hide the custom expression field based on period selection."""
+        custom_row = self.query_one("#recurring-custom-period-row")
+        custom_row.display = event.value == "custom"
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         match event.button.id:
@@ -226,7 +253,20 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
             self.notify("Description is required", severity="error", timeout=3)
             return
 
-        if not period or period == Select.BLANK:
+        if period == "custom":
+            custom_expr = self.query_one("#recurring-input-custom-period", Input).value.strip()
+            if not custom_expr:
+                self.notify("Custom period expression is required", severity="error", timeout=3)
+                return
+            if not validate_period_expr(custom_expr):
+                self.notify(
+                    f"Invalid period expression: {custom_expr!r}",
+                    severity="error",
+                    timeout=5,
+                )
+                return
+            period = custom_expr
+        elif not period or period == Select.BLANK:
             self.notify("Period is required", severity="error", timeout=3)
             return
 
