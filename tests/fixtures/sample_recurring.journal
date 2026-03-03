@@ -1,0 +1,7 @@
+~ monthly from 2026-01-01  ; rule-id:rent-001 Rent payment
+    expenses:rent                       €800.00
+    assets:bank:checking
+
+~ weekly from 2026-01-06  ; rule-id:groceries-001 Weekly groceries
+    expenses:food:groceries              €50.00
+    assets:bank:checking

@@ -212,6 +212,21 @@ class ReportRow:
 
 
 @dataclass
+class RecurringRule:
+    """A single recurring transaction rule stored in recurring.journal."""
+
+    rule_id: str
+    period_expr: str
+    description: str
+    postings: list[Posting] = field(default_factory=list)
+    status: TransactionStatus = TransactionStatus.UNMARKED
+    start_date: str | None = None
+    end_date: str | None = None
+    comment: str = ""
+    code: str = ""
+
+
+@dataclass
 class ReportData:
     """Parsed output of a multi-period hledger report (IS, BS, CF).
 

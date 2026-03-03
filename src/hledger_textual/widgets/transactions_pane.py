@@ -78,6 +78,11 @@ class TransactionsPane(Widget):
     # Actions
     # ------------------------------------------------------------------
 
+    def reload(self) -> None:
+        """Silently reload transactions and summary (no notification)."""
+        self._table.reload()
+        self._load_summary(self._table.current_month)
+
     def action_refresh(self) -> None:
         """Reload transactions and summary from the journal."""
         self._table.do_refresh()
@@ -147,16 +152,12 @@ class TransactionsPane(Widget):
 
     @work(thread=True)
     def _do_append(self, transaction: Transaction) -> None:
-        """Append a transaction to the journal and reload."""
+        """Append a transaction to the journal and emit JournalChanged."""
         from hledger_textual.journal import JournalError, append_transaction
 
         try:
             append_transaction(self.journal_file, transaction)
-            self.app.call_from_thread(self._table.reload)
             self.app.call_from_thread(self.notify, "Transaction added", timeout=3)
-            self.app.call_from_thread(
-                self._load_summary, self._table.current_month
-            )
             self.app.call_from_thread(
                 self._table.post_message, TransactionsTable.JournalChanged()
             )

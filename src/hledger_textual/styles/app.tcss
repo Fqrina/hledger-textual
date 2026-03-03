@@ -644,7 +644,113 @@ SyncConfirmModal {
     margin: 0 1;
 }
 
-/* --- Theme Picker Modal --- */
+/* --- Recurring Pane --- */
+
+RecurringPane {
+    height: 1fr;
+    layout: vertical;
+    padding-top: 1;
+}
+
+#recurring-table {
+    height: 1fr;
+}
+
+/* --- Recurring Delete Confirmation Modal --- */
+
+RecurringDeleteConfirmModal {
+    align: center middle;
+    background: $surface 60%;
+}
+
+#recurring-delete-dialog {
+    width: 60;
+    height: auto;
+    max-height: 20;
+    border: thick $error;
+    background: $surface;
+    padding: 1 2;
+}
+
+#recurring-delete-title {
+    text-style: bold;
+    color: $error;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#recurring-delete-summary {
+    margin-bottom: 1;
+    height: auto;
+}
+
+#recurring-delete-buttons {
+    height: 3;
+    align: center middle;
+}
+
+#recurring-delete-buttons Button {
+    margin: 0 1;
+}
+
+#btn-recurring-delete {
+    background: $error;
+}
+
+/* --- Recurring Generate Screen --- */
+
+RecurringGenerateScreen {
+    align: center middle;
+    background: $surface 60%;
+}
+
+#recurring-generate-dialog {
+    width: 80;
+    max-width: 90%;
+    height: auto;
+    max-height: 85%;
+    border: thick $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+#recurring-generate-title {
+    text-style: bold;
+    color: $accent;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#recurring-generate-summary {
+    margin-bottom: 1;
+    height: auto;
+}
+
+#recurring-generate-table {
+    height: auto;
+    max-height: 20;
+    margin-bottom: 1;
+}
+
+#recurring-generate-buttons {
+    height: 3;
+    align: center middle;
+}
+
+#recurring-generate-buttons Button {
+    margin: 0 1;
+}
+
+/* --- Recurring Form Screen --- */
+
+RecurringFormScreen {
+    align: center middle;
+    background: $surface 60%;
+}
+
+/* Theme Picker Modal --- */
 
 ThemePickerModal {
     align: center middle;
