@@ -1,0 +1,21 @@
+; Scenario: Mixed — some standard names, some type-tagged
+; income:* auto-detected + revenues:* with type tag
+
+account revenues       ; type: R
+account spese          ; type: X
+
+2026-03-01 Salary (standard)
+    assets:bank:checking       €3000.00
+    income:salary
+
+2026-03-02 Consulting (type-tagged)
+    assets:bank:checking       €500.00
+    revenues:consulting
+
+2026-03-05 Groceries (standard)
+    expenses:food              €120.00
+    assets:bank:checking
+
+2026-03-10 Office supplies (type-tagged)
+    spese:ufficio              €80.00
+    assets:bank:checking

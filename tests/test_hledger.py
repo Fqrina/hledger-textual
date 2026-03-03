@@ -781,3 +781,95 @@ class TestLoadIncomeBreakdown:
         """A period with no transactions should return an empty list."""
         breakdown = load_income_breakdown(income_journal, "1999-01")
         assert breakdown == []
+
+
+# ---------------------------------------------------------------------------
+#  Account type query tests (issue #18)
+#  Verify that type:R / type:X queries work with all naming conventions.
+# ---------------------------------------------------------------------------
+
+ACCOUNT_TYPE_FIXTURES = Path(__file__).parent / "fixtures" / "account_types"
+
+_ACCOUNT_TYPE_JOURNALS = [
+    pytest.param("standard.journal", id="standard"),
+    pytest.param("type_tagged_revenues.journal", id="type-tagged-revenues"),
+    pytest.param("mixed.journal", id="mixed"),
+    pytest.param("custom_italian.journal", id="custom-italian"),
+]
+
+
+class TestAccountTypeQueries:
+    """Ensure income/expense queries work regardless of account naming.
+
+    All four fixture journals contain the same monetary totals
+    (income €3500, expenses €200) but use different account names
+    and type tag configurations.
+    """
+
+    PERIOD = "2026-03"
+
+    @pytest.mark.parametrize("journal_name", _ACCOUNT_TYPE_JOURNALS)
+    def test_period_summary_income(self, journal_name: str):
+        """load_period_summary returns correct income for all naming styles."""
+        summary = load_period_summary(
+            ACCOUNT_TYPE_FIXTURES / journal_name, self.PERIOD,
+        )
+        assert summary.income == Decimal("3500.00")
+
+    @pytest.mark.parametrize("journal_name", _ACCOUNT_TYPE_JOURNALS)
+    def test_period_summary_expenses(self, journal_name: str):
+        """load_period_summary returns correct expenses for all naming styles."""
+        summary = load_period_summary(
+            ACCOUNT_TYPE_FIXTURES / journal_name, self.PERIOD,
+        )
+        assert summary.expenses == Decimal("200.00")
+
+    @pytest.mark.parametrize("journal_name", _ACCOUNT_TYPE_JOURNALS)
+    def test_period_summary_net(self, journal_name: str):
+        """load_period_summary returns correct net for all naming styles."""
+        summary = load_period_summary(
+            ACCOUNT_TYPE_FIXTURES / journal_name, self.PERIOD,
+        )
+        assert summary.net == Decimal("3300.00")
+
+    @pytest.mark.parametrize("journal_name", _ACCOUNT_TYPE_JOURNALS)
+    def test_period_summary_commodity(self, journal_name: str):
+        """load_period_summary detects commodity for all naming styles."""
+        summary = load_period_summary(
+            ACCOUNT_TYPE_FIXTURES / journal_name, self.PERIOD,
+        )
+        assert summary.commodity == "€"
+
+    @pytest.mark.parametrize("journal_name", _ACCOUNT_TYPE_JOURNALS)
+    def test_income_breakdown_count(self, journal_name: str):
+        """load_income_breakdown returns two accounts for all naming styles."""
+        breakdown = load_income_breakdown(
+            ACCOUNT_TYPE_FIXTURES / journal_name, self.PERIOD,
+        )
+        assert len(breakdown) == 2
+
+    @pytest.mark.parametrize("journal_name", _ACCOUNT_TYPE_JOURNALS)
+    def test_income_breakdown_amounts(self, journal_name: str):
+        """load_income_breakdown returns correct amounts for all naming styles."""
+        breakdown = load_income_breakdown(
+            ACCOUNT_TYPE_FIXTURES / journal_name, self.PERIOD,
+        )
+        amounts = sorted([row[1] for row in breakdown], reverse=True)
+        assert amounts == [Decimal("3000.00"), Decimal("500.00")]
+
+    @pytest.mark.parametrize("journal_name", _ACCOUNT_TYPE_JOURNALS)
+    def test_expense_breakdown_count(self, journal_name: str):
+        """load_expense_breakdown returns two accounts for all naming styles."""
+        breakdown = load_expense_breakdown(
+            ACCOUNT_TYPE_FIXTURES / journal_name, self.PERIOD,
+        )
+        assert len(breakdown) == 2
+
+    @pytest.mark.parametrize("journal_name", _ACCOUNT_TYPE_JOURNALS)
+    def test_expense_breakdown_amounts(self, journal_name: str):
+        """load_expense_breakdown returns correct amounts for all naming styles."""
+        breakdown = load_expense_breakdown(
+            ACCOUNT_TYPE_FIXTURES / journal_name, self.PERIOD,
+        )
+        amounts = sorted([row[1] for row in breakdown], reverse=True)
+        assert amounts == [Decimal("120.00"), Decimal("80.00")]

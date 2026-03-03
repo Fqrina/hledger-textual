@@ -482,30 +482,41 @@ def load_period_summary(file: str | Path, period: str | None = None) -> PeriodSu
     """
     period_args = ("-p", period) if period else ()
 
-    # Query 1: income and expenses (no -B, keeps original amounts)
-    output = run_hledger(
-        "balance", "income", "expenses",
-        *period_args, "--flat", "--no-total", "-O", "csv",
-        file=file,
-    )
-
+    # Query 1a: income/revenue accounts (type:R — respects account type metadata)
     income = Decimal("0")
     expenses = Decimal("0")
     commodity = ""
 
-    reader = csv.reader(io.StringIO(output))
-    next(reader, None)  # skip header
-    for row in reader:
+    output_r = run_hledger(
+        "balance", "type:R",
+        *period_args, "--flat", "--no-total", "-O", "csv",
+        file=file,
+    )
+    reader_r = csv.reader(io.StringIO(output_r))
+    next(reader_r, None)  # skip header
+    for row in reader_r:
         if len(row) < 2 or not row[0]:
             continue
-        account = row[0].strip().lower()
         qty, com = _parse_budget_amount(row[1].strip())
         if not commodity and com:
             commodity = com
-        if account.startswith("income"):
-            income += abs(qty)
-        elif account.startswith("expenses"):
-            expenses += abs(qty)
+        income += abs(qty)
+
+    # Query 1b: expense accounts (type:X — respects account type metadata)
+    output_x = run_hledger(
+        "balance", "type:X",
+        *period_args, "--flat", "--no-total", "-O", "csv",
+        file=file,
+    )
+    reader_x = csv.reader(io.StringIO(output_x))
+    next(reader_x, None)  # skip header
+    for row in reader_x:
+        if len(row) < 2 or not row[0]:
+            continue
+        qty, com = _parse_budget_amount(row[1].strip())
+        if not commodity and com:
+            commodity = com
+        expenses += abs(qty)
 
     # Query 2: investments at cost (-B converts units to purchase price)
     investments = Decimal("0")
@@ -541,8 +552,8 @@ def _load_account_breakdown(
 
     Args:
         file: Path to the journal file.
-        account_type: The top-level account to query (e.g. ``"expenses"``
-            or ``"income"``).
+        account_type: The account type query (e.g. ``"type:X"`` for expenses
+            or ``"type:R"`` for revenue/income).
         period: A period string like ``'2026-02'``.
 
     Returns:
@@ -589,7 +600,7 @@ def load_expense_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    return _load_account_breakdown(file, "expenses", period)
+    return _load_account_breakdown(file, "type:X", period)
 
 
 def load_income_breakdown(
@@ -608,7 +619,7 @@ def load_income_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    return _load_account_breakdown(file, "income", period)
+    return _load_account_breakdown(file, "type:R", period)
 
 
 def load_investment_positions(

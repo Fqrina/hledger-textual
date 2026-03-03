@@ -1,0 +1,24 @@
+; Scenario: Fully custom Italian names with type tags
+; No standard hledger name prefixes at all
+
+account attività           ; type: A
+account passività          ; type: L
+account entrate            ; type: R
+account uscite             ; type: X
+account patrimonio         ; type: E
+
+2026-03-01 Stipendio
+    attività:banca:conto       €3000.00
+    entrate:stipendio
+
+2026-03-02 Lavoro freelance
+    attività:banca:conto       €500.00
+    entrate:freelance
+
+2026-03-05 Spesa alimentare
+    uscite:cibo:supermercato   €120.00
+    attività:banca:conto
+
+2026-03-10 Bolletta elettricità
+    uscite:utenze              €80.00
+    attività:banca:conto

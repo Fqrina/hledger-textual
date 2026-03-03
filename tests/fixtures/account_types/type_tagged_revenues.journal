@@ -1,0 +1,22 @@
+; Scenario: Non-standard "revenues:*" accounts with type: R tags
+; This is the bug scenario from issue #18
+
+account revenues           ; type: R
+account spese              ; type: X
+account attività:banca     ; type: A
+
+2026-03-01 Stipendio
+    attività:banca             €3000.00
+    revenues:salary
+
+2026-03-02 Consulenza
+    attività:banca             €500.00
+    revenues:freelance
+
+2026-03-05 Spesa alimentare
+    spese:cibo                 €120.00
+    attività:banca
+
+2026-03-10 Bolletta luce
+    spese:utenze               €80.00
+    attività:banca
