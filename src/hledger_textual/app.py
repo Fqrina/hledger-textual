@@ -106,6 +106,29 @@ class HledgerTuiApp(App):
     def on_mount(self) -> None:
         """Focus the default section after mount."""
         self._focus_section("summary")
+        self._check_for_updates()
+
+    @work(thread=True, exclusive=True, group="startup-update-check")
+    def _check_for_updates(self) -> None:
+        """Check PyPI for a newer version and notify once if found."""
+        import importlib.metadata
+
+        from hledger_textual.updates import get_latest_version, is_newer
+
+        try:
+            meta = importlib.metadata.metadata("hledger-textual")
+            current = meta.get("Version", "0")
+        except importlib.metadata.PackageNotFoundError:
+            return
+
+        latest = get_latest_version()
+        if latest and is_newer(latest, current):
+            self.app.call_from_thread(
+                self.notify,
+                f"hledger-textual v{latest} is available (current: v{current})",
+                severity="information",
+                timeout=8,
+            )
 
     def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
         """Handle tab activation (click) — switch content and focus."""
