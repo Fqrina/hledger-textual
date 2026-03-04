@@ -162,6 +162,15 @@ def _parse_amount(data: dict) -> Amount:
                 quantity=abs(cost_amount.quantity * quantity),
                 style=cost_amount.style,
             )
+        else:
+            # TotalCost (@@): hledger may store the quantity as negative for
+            # sell transactions; normalise to always-positive so format()
+            # produces a valid journal entry (e.g. "@@" is always positive).
+            cost_amount = Amount(
+                commodity=cost_amount.commodity,
+                quantity=abs(cost_amount.quantity),
+                style=cost_amount.style,
+            )
         cost = cost_amount
 
     return Amount(
@@ -535,7 +544,8 @@ def load_period_summary(file: str | Path, period: str | None = None) -> PeriodSu
             qty, com = _parse_budget_amount(row[1].strip())
             if not commodity and com:
                 commodity = com
-            investments += abs(qty)
+            if qty > 0:
+                investments += qty
     except HledgerError:
         pass  # no investments or hledger error, keep 0
 
@@ -737,7 +747,7 @@ def load_investment_report(
 ) -> ReportData:
     """Load a multi-period investment balance report from hledger.
 
-    Queries ``assets:investments`` with ``hledger bal -M -O csv --no-elide``
+    Queries ``assets:investments`` with ``hledger bal -M -O csv --flat``
     and parses the result using the same CSV format as IS/BS/CF reports.
 
     Args:
@@ -752,7 +762,7 @@ def load_investment_report(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    args = ["bal", "assets:investments", "-M", "-O", "csv", "--no-elide"]
+    args = ["bal", "assets:investments", "-M", "-O", "csv", "--flat"]
     if commodity:
         args.extend(["-X", commodity])
     if period_begin:

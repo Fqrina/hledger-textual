@@ -1,11 +1,11 @@
-"""Tests for the AmountInput widget keyboard handling and blur formatting."""
+"""Tests for AmountInput and NumericAmountInput keyboard handling and blur formatting."""
 
 from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.widgets import Input
 
-from hledger_textual.widgets.amount_input import AmountInput
+from hledger_textual.widgets.amount_input import AmountInput, NumericAmountInput
 
 
 class _AmountApp(App):
@@ -29,24 +29,44 @@ class TestAmountInputOnKey:
             await pilot.press("5")
             assert "5" in app.query_one("#amount", AmountInput).value
 
-    async def test_letter_is_blocked(self):
-        """Letter characters are rejected and not inserted."""
+    async def test_letter_is_inserted(self):
+        """Letter characters are accepted for commodity names (e.g. XEON)."""
         app = _AmountApp()
         async with app.run_test() as pilot:
             app.query_one("#amount").focus()
             await pilot.pause()
             await pilot.press("a")
-            assert app.query_one("#amount", AmountInput).value == ""
+            assert "a" in app.query_one("#amount", AmountInput).value
 
-    async def test_uppercase_letter_is_blocked(self):
-        """Uppercase letter characters are rejected."""
+    async def test_uppercase_letter_is_inserted(self):
+        """Uppercase letters are accepted for commodity names."""
         app = _AmountApp()
         async with app.run_test() as pilot:
             inp = app.query_one("#amount", AmountInput)
             inp.focus()
             await pilot.pause()
             await pilot.press("A")
-            assert inp.value == ""
+            assert "A" in inp.value
+
+    async def test_space_is_inserted(self):
+        """Space is accepted to separate quantity from commodity."""
+        app = _AmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", AmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("5", "space", "X")
+            assert " " in inp.value
+
+    async def test_at_sign_is_inserted(self):
+        """@ is accepted for cost annotations."""
+        app = _AmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", AmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("@")
+            assert "@" in inp.value
 
     async def test_decimal_point_accepted(self):
         """A single decimal point is accepted after a digit."""
@@ -59,16 +79,6 @@ class TestAmountInputOnKey:
             await pilot.press(".")
             assert "." in inp.value
 
-    async def test_second_decimal_point_blocked(self):
-        """A second decimal point is rejected."""
-        app = _AmountApp()
-        async with app.run_test() as pilot:
-            inp = app.query_one("#amount", AmountInput)
-            inp.focus()
-            await pilot.pause()
-            await pilot.press("5", ".", "2", ".")
-            assert inp.value.count(".") == 1
-
     async def test_minus_at_position_zero_accepted(self):
         """Minus sign at cursor position 0 is accepted."""
         app = _AmountApp()
@@ -78,26 +88,6 @@ class TestAmountInputOnKey:
             await pilot.pause()
             await pilot.press("-")
             assert inp.value.startswith("-")
-
-    async def test_minus_after_digit_blocked(self):
-        """Minus sign after other characters is rejected."""
-        app = _AmountApp()
-        async with app.run_test() as pilot:
-            inp = app.query_one("#amount", AmountInput)
-            inp.focus()
-            await pilot.pause()
-            await pilot.press("5", "-")
-            assert "-" not in inp.value
-
-    async def test_second_minus_blocked(self):
-        """A second minus sign is rejected even with cursor at start."""
-        app = _AmountApp()
-        async with app.run_test() as pilot:
-            inp = app.query_one("#amount", AmountInput)
-            inp.focus()
-            await pilot.pause()
-            await pilot.press("-", "-")
-            assert inp.value.count("-") == 1
 
     async def test_multiple_digits_inserted(self):
         """Multiple digit keypresses accumulate correctly."""
@@ -169,3 +159,140 @@ class TestAmountInputOnBlur:
             app.query_one("#other").focus()
             await pilot.pause()
             assert inp.value == "12.34"
+
+    async def test_complex_amount_not_reformatted_on_blur(self):
+        """Complex hledger amount strings are not modified when focus leaves."""
+        app = _AmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", AmountInput)
+            inp.value = "-10 STCK @@ €200.00"
+            inp.focus()
+            await pilot.pause()
+            app.query_one("#other").focus()
+            await pilot.pause()
+            assert inp.value == "-10 STCK @@ €200.00"
+
+
+class _NumericAmountApp(App):
+    """Minimal app with a NumericAmountInput for isolated widget testing."""
+
+    def compose(self) -> ComposeResult:
+        """Compose a single NumericAmountInput and a second Input for blur testing."""
+        yield NumericAmountInput(id="amount")
+        yield Input(id="other")
+
+
+class TestNumericAmountInputOnKey:
+    """Tests for character filtering in NumericAmountInput._on_key."""
+
+    async def test_digit_is_inserted(self):
+        """Digit characters pass through."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("5")
+            assert "5" in inp.value
+
+    async def test_letter_is_blocked(self):
+        """Letter characters are rejected."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("a")
+            assert inp.value == ""
+
+    async def test_uppercase_letter_is_blocked(self):
+        """Uppercase letters are rejected."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("A")
+            assert inp.value == ""
+
+    async def test_space_is_blocked(self):
+        """Space is rejected."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("space")
+            assert inp.value == ""
+
+    async def test_at_sign_is_blocked(self):
+        """@ is rejected."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("@")
+            assert inp.value == ""
+
+    async def test_decimal_point_accepted(self):
+        """A single decimal point is accepted."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("5", ".")
+            assert "." in inp.value
+
+    async def test_second_decimal_point_blocked(self):
+        """A second decimal point is rejected."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("5", ".", "2", ".")
+            assert inp.value.count(".") == 1
+
+    async def test_minus_at_start_accepted(self):
+        """Minus at position 0 is accepted."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("-")
+            assert inp.value.startswith("-")
+
+    async def test_minus_after_digit_blocked(self):
+        """Minus after a digit is rejected."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("5", "-")
+            assert "-" not in inp.value
+
+    async def test_second_minus_blocked(self):
+        """A second minus sign is rejected."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("-", "-")
+            assert inp.value.count("-") == 1
+
+    async def test_blur_formats_to_two_decimals(self):
+        """Numeric value is formatted to 2 decimal places on blur."""
+        app = _NumericAmountApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#amount", NumericAmountInput)
+            inp.focus()
+            await pilot.pause()
+            await pilot.press("4", "9")
+            app.query_one("#other").focus()
+            await pilot.pause()
+            assert inp.value == "49.00"

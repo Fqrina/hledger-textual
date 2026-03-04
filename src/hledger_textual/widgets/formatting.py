@@ -2,7 +2,42 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+import re
+from decimal import Decimal, InvalidOperation
+
+# Matches left-side currency symbol amounts with 3+ decimal places.
+# Handles both €-2442.140 (symbol before minus) and -€1.730 (minus before symbol).
+_FMT_STR_RE = re.compile(r"^(-?)([€$£¥₿₹])(-?)([\d,]+\.\d{3,})$")
+
+
+def fmt_amount_str(s: str) -> str:
+    """Round a hledger amount string to 2 decimal places for display.
+
+    Only affects amounts with a left-side currency symbol (€, $, etc.) that
+    have more than 2 decimal places.  Named-commodity amounts (``164 XEON``,
+    ``2.00 XDWD``), plain integers, and amounts already at ≤ 2 decimal places
+    are returned unchanged.
+
+    Handles both ``€-2442.140`` (symbol before minus) and ``-€1.730``
+    (minus before symbol) formats.
+
+    Args:
+        s: Raw amount string, e.g. from hledger CSV output or ``Amount.format()``.
+
+    Returns:
+        Amount string with at most 2 decimal places, or the original string
+        if it does not match a recognized currency format.
+    """
+    s = s.strip()
+    m = _FMT_STR_RE.match(s)
+    if not m:
+        return s
+    minus1, sym, minus2, numpart = m.groups()
+    try:
+        rounded = Decimal(numpart.replace(",", "")).quantize(Decimal("0.01"))
+        return f"{minus1}{sym}{minus2}{rounded}"
+    except InvalidOperation:
+        return s
 
 
 def fmt_amount(qty: Decimal, commodity: str) -> str:

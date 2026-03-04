@@ -17,6 +17,7 @@ from hledger_textual.config import load_default_commodity
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.formatting import fmt_amount_str
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 from hledger_textual.widgets.report_chart import ReportChart, extract_chart_data
 
@@ -54,10 +55,19 @@ def _merge_investments(is_data: ReportData, inv_data: ReportData) -> ReportData:
         is_section_header=True,
     ))
 
-    # Add non-section-header rows (data + Total)
+    # Add data rows only (skip section headers and totals): each leaf account
+    # (XEON, XDWD, XGDU) is already its own row, so the Total row is redundant
+    # and confusing when it concatenates multiple commodities in a single cell.
+    # Strip the common "assets:investments:" prefix to show only the leaf name.
     for row in inv_data.rows:
-        if not row.is_section_header:
-            merged_rows.append(row)
+        if not row.is_section_header and not row.is_total:
+            account = row.account
+            if ":" in account:
+                account = account.rsplit(":", 1)[-1]
+            merged_rows.append(ReportRow(
+                account=account,
+                amounts=row.amounts,
+            ))
 
     return ReportData(
         title=is_data.title,
@@ -205,7 +215,7 @@ class ReportsPane(Widget):
         for i, header in enumerate(data.period_headers):
             col_idx = i + 1
             table.add_column(header, key=f"period-{i}")
-            self._fixed_widths[col_idx] = 14
+            self._fixed_widths[col_idx] = 18
 
         # Populate rows with blank separator lines between groups
         n_cols = len(data.period_headers) + 1
@@ -230,10 +240,11 @@ class ReportsPane(Widget):
 
             cells = [account_text]
             for amt in row.amounts:
+                formatted = fmt_amount_str(amt)
                 if row.is_total:
-                    cells.append(f"[bold]{amt}[/bold]")
+                    cells.append(f"[bold]{formatted}[/bold]")
                 else:
-                    cells.append(amt)
+                    cells.append(formatted)
 
             # Pad if amounts are fewer than period columns
             while len(cells) < len(data.period_headers) + 1:

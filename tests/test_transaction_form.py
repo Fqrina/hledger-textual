@@ -10,7 +10,12 @@ import pytest
 
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.models import Amount, AmountStyle, Posting, TransactionStatus
-from hledger_textual.screens.transaction_form import TransactionFormScreen
+from hledger_textual.screens.transaction_form import (
+    TransactionFormScreen,
+    _build_commodity_data,
+    _extract_commodity_and_qty,
+    parse_amount_str,
+)
 from hledger_textual.widgets.amount_input import AmountInput
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
@@ -61,7 +66,7 @@ class TestFormOpens:
     """Tests for opening the form."""
 
     async def test_add_opens_form(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -70,7 +75,7 @@ class TestFormOpens:
             assert isinstance(app.screen, TransactionFormScreen)
 
     async def test_edit_opens_form(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -82,7 +87,7 @@ class TestFormOpens:
         from datetime import date
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -92,7 +97,7 @@ class TestFormOpens:
             assert date_input.value == date.today().isoformat()
 
     async def test_new_form_has_two_posting_rows(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -104,7 +109,7 @@ class TestFormOpens:
     async def test_edit_form_prefills_data(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -116,7 +121,7 @@ class TestFormOpens:
             assert form.query_one("#input-code", Input).value == "INV-001"
 
     async def test_edit_form_has_correct_posting_count(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -127,7 +132,7 @@ class TestFormOpens:
             assert len(rows) == 2
 
     async def test_escape_cancels_form(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -145,7 +150,7 @@ class TestFormValidation:
     async def test_empty_description_rejected(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -162,7 +167,7 @@ class TestFormValidation:
     async def test_invalid_date_rejected(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -178,7 +183,7 @@ class TestFormValidation:
     async def test_invalid_date_format_rejected(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -195,7 +200,7 @@ class TestFormValidation:
     async def test_date_wrong_separator_rejected(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -211,7 +216,7 @@ class TestFormValidation:
     async def test_empty_date_rejected(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -227,7 +232,7 @@ class TestFormValidation:
     async def test_less_than_two_postings_rejected(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -243,7 +248,7 @@ class TestFormValidation:
     async def test_invalid_amount_rejected(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -265,7 +270,7 @@ class TestFormPostings:
     """Tests for posting row management."""
 
     async def test_add_posting_row(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -280,7 +285,7 @@ class TestFormPostings:
             assert len(form.query(PostingRow)) == 3
 
     async def test_remove_posting_row(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -300,7 +305,7 @@ class TestFormPostings:
             assert len(form.query(PostingRow)) == 2
 
     async def test_cannot_remove_below_two(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -322,7 +327,7 @@ class TestFormSave:
     async def test_valid_form_dismisses(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -345,7 +350,7 @@ class TestFormSave:
     async def test_valid_form_with_all_fields(self, app: HledgerTuiApp):
         from textual.widgets import Input, Select
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -362,8 +367,80 @@ class TestFormSave:
             rows = list(form.query(PostingRow))
             rows[0].query_one("#account-0", Input).value = "expenses:food"
             rows[0].query_one("#amount-0", Input).value = "25.00"
-            rows[0].query_one("#commodity-0", Input).value = "EUR"
+            # commodity is now a read-only label; the amount embeds the currency instead
             rows[1].query_one("#account-1", Input).value = "assets:bank:checking"
+
+            form._save()
+            await pilot.pause(delay=1.0)
+            assert not isinstance(app.screen, TransactionFormScreen)
+
+
+class TestBalanceValidation:
+    """Tests for pre-save balance validation."""
+
+    async def test_unbalanced_same_commodity_is_rejected(self, app: HledgerTuiApp):
+        from textual.widgets import Input
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            form = app.screen
+
+            form.query_one("#input-description", Input).value = "Unbalanced test"
+            rows = list(form.query(PostingRow))
+            rows[0].query_one("#account-0", Input).value = "assets:bank"
+            rows[0].query_one("#amount-0", Input).value = "100.00"
+            rows[1].query_one("#account-1", Input).value = "expenses:food"
+            rows[1].query_one("#amount-1", Input).value = "100.00"
+
+            form._save()
+            await pilot.pause()
+            # Form must NOT have dismissed — still showing the form
+            assert isinstance(app.screen, TransactionFormScreen)
+
+    async def test_balanced_same_commodity_is_accepted(self, app: HledgerTuiApp):
+        from textual.widgets import Input
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            form = app.screen
+
+            form.query_one("#input-description", Input).value = "Balanced test"
+            rows = list(form.query(PostingRow))
+            rows[0].query_one("#account-0", Input).value = "expenses:food"
+            rows[0].query_one("#amount-0", Input).value = "100.00"
+            rows[1].query_one("#account-1", Input).value = "assets:bank"
+            rows[1].query_one("#amount-1", Input).value = "-100.00"
+
+            form._save()
+            await pilot.pause(delay=1.0)
+            # Form should dismiss when balanced
+            assert not isinstance(app.screen, TransactionFormScreen)
+
+    async def test_auto_balance_one_blank_is_accepted(self, app: HledgerTuiApp):
+        from textual.widgets import Input
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            form = app.screen
+
+            form.query_one("#input-description", Input).value = "Auto balance test"
+            rows = list(form.query(PostingRow))
+            rows[0].query_one("#account-0", Input).value = "expenses:food"
+            rows[0].query_one("#amount-0", Input).value = "100.00"
+            rows[1].query_one("#account-1", Input).value = "assets:bank"
+            # Leave amount-1 blank → hledger auto-balances
 
             form._save()
             await pilot.pause(delay=1.0)
@@ -551,7 +628,7 @@ class TestDescriptionAutocomplete:
     async def test_description_uses_autocomplete_input(self, app: HledgerTuiApp):
         from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -564,7 +641,7 @@ class TestDescriptionAutocomplete:
     async def test_description_has_suggester(self, app: HledgerTuiApp):
         from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -575,7 +652,7 @@ class TestDescriptionAutocomplete:
             assert desc_input.suggester is not None
 
     async def test_date_uses_date_input(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -627,7 +704,7 @@ class TestAmountInputWidget:
     """Integration tests for AmountInput in the posting row."""
 
     async def test_amount_uses_amount_input(self, app: HledgerTuiApp):
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
@@ -645,20 +722,249 @@ class TestDefaultCommodity:
     async def test_new_form_prefills_commodity_from_config(
         self, app: HledgerTuiApp, monkeypatch
     ):
-        """New transaction form pre-fills the commodity field with the configured default."""
-        from textual.widgets import Input
+        """New transaction form shows the configured default commodity in the hint."""
+        from textual.widgets import Static
 
         monkeypatch.setattr(
             "hledger_textual.screens.transaction_form.load_default_commodity",
             lambda: "\u20ac",
         )
-        async with app.run_test(size=(100, 50)) as pilot:
+        async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
-            rows = list(form.query(PostingRow))
-            commodity_val = rows[0].query_one("#commodity-0", Input).value
-            assert commodity_val == "\u20ac"
+            hint = form.query_one("#default-commodity-hint", Static)
+            assert "\u20ac" in hint.renderable
+
+
+class TestParseAmountStr:
+    """Unit tests for the parse_amount_str helper."""
+
+    def test_simple_integer(self):
+        amt = parse_amount_str("100", "€")
+        assert amt is not None
+        assert amt.quantity == Decimal("100")
+        assert amt.commodity == "€"
+
+    def test_simple_decimal(self):
+        amt = parse_amount_str("50.00", "€")
+        assert amt is not None
+        assert amt.quantity == Decimal("50.00")
+        assert amt.commodity == "€"
+
+    def test_negative_simple(self):
+        amt = parse_amount_str("-50.00", "€")
+        assert amt is not None
+        assert amt.quantity == Decimal("-50.00")
+
+    def test_currency_prefix(self):
+        """Currency-prefixed amount is parsed as left-side commodity."""
+        amt = parse_amount_str("€50.00", "€")
+        assert amt is not None
+        assert amt.commodity == "€"
+        assert amt.quantity == Decimal("50.00")
+        assert amt.style.commodity_side == "L"
+
+    def test_negative_currency_prefix(self):
+        amt = parse_amount_str("-€50.00", "€")
+        assert amt is not None
+        assert amt.quantity == Decimal("-50.00")
+        assert amt.commodity == "€"
+
+    def test_qty_commodity(self):
+        """Quantity followed by commodity name is parsed as right-side commodity."""
+        amt = parse_amount_str("-10.00 STCK", "€")
+        assert amt is not None
+        assert amt.quantity == Decimal("-10.00")
+        assert amt.commodity == "STCK"
+        assert amt.style.commodity_side == "R"
+        assert amt.cost is None
+
+    def test_total_cost_annotation(self):
+        """@@ annotation stores the total cost directly."""
+        amt = parse_amount_str("-10 STCK @@ €200.00", "€")
+        assert amt is not None
+        assert amt.quantity == Decimal("-10")
+        assert amt.commodity == "STCK"
+        assert amt.cost is not None
+        assert amt.cost.commodity == "€"
+        assert amt.cost.quantity == Decimal("200.00")
+
+    def test_unit_cost_annotation_converted_to_total(self):
+        """@ annotation multiplies unit price by quantity to get total cost."""
+        amt = parse_amount_str("-10 STCK @ €20.00", "€")
+        assert amt is not None
+        assert amt.commodity == "STCK"
+        assert amt.cost is not None
+        assert amt.cost.commodity == "€"
+        # 10 * 20.00 = 200.00
+        assert amt.cost.quantity == Decimal("200.00")
+
+    def test_invalid_returns_none(self):
+        assert parse_amount_str("abc", "€") is None
+
+    def test_empty_returns_none(self):
+        assert parse_amount_str("", "€") is None
+
+    def test_invalid_cost_returns_none(self):
+        assert parse_amount_str("-10 STCK @@ invalid", "€") is None
+
+    def test_roundtrip_format(self):
+        """Amount parsed from a complex string round-trips through format()."""
+        amt = parse_amount_str("-10.00 STCK @@ €200.00", "€")
+        assert amt is not None
+        assert amt.format() == "-10.00 STCK @@ €200.00"
+
+    def test_negative_total_cost_normalised_to_positive(self):
+        """A negative @@ cost string is normalised to a positive cost quantity."""
+        amt = parse_amount_str("-10 STCK @@ -€200.00", "€")
+        assert amt is not None
+        assert amt.cost is not None
+        assert amt.cost.quantity == Decimal("200.00")
+        # format() must produce a valid hledger string (positive cost)
+        assert amt.format() == "-10 STCK @@ €200.00"
+
+
+class TestExtractCommodityAndQty:
+    """Unit tests for _extract_commodity_and_qty."""
+
+    def test_plain_number_returns_none(self):
+        assert _extract_commodity_and_qty("50.00") is None
+
+    def test_currency_prefix_returns_none(self):
+        assert _extract_commodity_and_qty("€742.55") is None
+
+    def test_negative_currency_prefix_returns_none(self):
+        assert _extract_commodity_and_qty("-€742.55") is None
+
+    def test_named_commodity_negative(self):
+        result = _extract_commodity_and_qty("-5 XEON")
+        assert result == (Decimal("-5"), "XEON", None)
+
+    def test_named_commodity_with_total_cost(self):
+        result = _extract_commodity_and_qty("-5 XEON @@ €200")
+        assert result is not None
+        qty, commodity, proceeds = result
+        assert qty == Decimal("-5")
+        assert commodity == "XEON"
+        assert proceeds == Decimal("200")
+
+    def test_named_commodity_with_total_cost_partial(self):
+        """Incomplete cost annotation still extracts commodity without proceeds."""
+        result = _extract_commodity_and_qty("-5 XEON @@ €7")
+        assert result is not None
+        qty, commodity, proceeds = result
+        assert qty == Decimal("-5")
+        assert commodity == "XEON"
+        assert proceeds == Decimal("7")
+
+    def test_named_commodity_positive(self):
+        result = _extract_commodity_and_qty("10 STCK")
+        assert result == (Decimal("10"), "STCK", None)
+
+    def test_named_commodity_with_decimal(self):
+        result = _extract_commodity_and_qty("-5.50 ETF")
+        assert result is not None
+        qty, commodity, proceeds = result
+        assert qty == Decimal("-5.50")
+        assert commodity == "ETF"
+        assert proceeds is None
+
+    def test_empty_returns_none(self):
+        assert _extract_commodity_and_qty("") is None
+
+    def test_named_commodity_with_unit_cost(self):
+        """@ unit cost is converted to total proceeds (qty × unit_price)."""
+        result = _extract_commodity_and_qty("-5 XEON @ €148.51")
+        assert result is not None
+        qty, commodity, proceeds = result
+        assert qty == Decimal("-5")
+        assert commodity == "XEON"
+        assert proceeds == Decimal("742.55")
+
+    def test_buy_has_no_gain_proceeds(self):
+        """Positive qty (buy) still returns proceeds when annotation is present."""
+        result = _extract_commodity_and_qty("10 XEON @@ €1500")
+        assert result is not None
+        qty, commodity, proceeds = result
+        assert qty == Decimal("10")
+        assert proceeds == Decimal("1500")
+
+
+class TestBuildCommodityData:
+    """Unit tests for _build_commodity_data."""
+
+    def test_single_account_single_commodity(self):
+        positions = [("assets:investments:etf", Decimal("100"), "XEON")]
+        costs = {"assets:investments:etf": (Decimal("10000"), "€")}
+        result = _build_commodity_data(positions, costs)
+        assert "XEON" in result
+        total_units, total_cost, currency = result["XEON"]
+        assert total_units == Decimal("100")
+        assert total_cost == Decimal("10000")
+        assert currency == "€"
+
+    def test_multiple_accounts_same_commodity(self):
+        positions = [
+            ("assets:investments:acc1", Decimal("60"), "XEON"),
+            ("assets:investments:acc2", Decimal("40"), "XEON"),
+        ]
+        costs = {
+            "assets:investments:acc1": (Decimal("6000"), "€"),
+            "assets:investments:acc2": (Decimal("4200"), "€"),
+        }
+        result = _build_commodity_data(positions, costs)
+        assert "XEON" in result
+        total_units, total_cost, currency = result["XEON"]
+        assert total_units == Decimal("100")
+        assert total_cost == Decimal("10200")
+        assert currency == "€"
+
+    def test_account_without_cost_excludes_commodity(self):
+        positions = [("assets:investments:etf", Decimal("100"), "XEON")]
+        costs: dict = {}
+        result = _build_commodity_data(positions, costs)
+        assert "XEON" not in result
+
+    def test_zero_units_excluded(self):
+        positions = [("assets:investments:etf", Decimal("0"), "XEON")]
+        costs = {"assets:investments:etf": (Decimal("0"), "€")}
+        result = _build_commodity_data(positions, costs)
+        assert "XEON" not in result
+
+    def test_negative_units_excluded(self):
+        positions = [("assets:investments:etf", Decimal("-5"), "XEON")]
+        costs = {"assets:investments:etf": (Decimal("500"), "€")}
+        result = _build_commodity_data(positions, costs)
+        assert "XEON" not in result
+
+    def test_multiple_commodities(self):
+        positions = [
+            ("assets:investments:etf1", Decimal("50"), "XEON"),
+            ("assets:investments:etf2", Decimal("30"), "STCK"),
+        ]
+        costs = {
+            "assets:investments:etf1": (Decimal("5000"), "€"),
+            "assets:investments:etf2": (Decimal("900"), "€"),
+        }
+        result = _build_commodity_data(positions, costs)
+        assert "XEON" in result
+        assert "STCK" in result
+        assert result["XEON"][0] == Decimal("50")
+        assert result["STCK"][0] == Decimal("30")
+
+    def test_partial_cost_excludes_commodity(self):
+        """When one account for a commodity lacks a cost, the commodity is excluded."""
+        positions = [
+            ("assets:investments:acc1", Decimal("60"), "XEON"),
+            ("assets:investments:acc2", Decimal("40"), "XEON"),
+        ]
+        costs = {
+            "assets:investments:acc1": (Decimal("6000"), "€"),
+            # acc2 intentionally missing
+        }
+        result = _build_commodity_data(positions, costs)
+        assert "XEON" not in result
