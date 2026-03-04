@@ -68,10 +68,21 @@ class Amount:
 
         if self.style.commodity_side == "L":
             space = " " if self.style.commodity_spaced else ""
-            return f"{sign}{self.commodity}{space}{qty_str}"
+            base = f"{sign}{self.commodity}{space}{qty_str}"
         else:
             space = " " if self.style.commodity_spaced else ""
-            return f"{sign}{qty_str}{space}{self.commodity}"
+            base = f"{sign}{qty_str}{space}{self.commodity}"
+
+        if self.cost is not None:
+            # Cost annotations are always written as positive values in hledger.
+            cost_display = Amount(
+                commodity=self.cost.commodity,
+                quantity=abs(self.cost.quantity),
+                style=self.cost.style,
+            )
+            base += f" @@ {cost_display.format()}"
+
+        return base
 
 
 @dataclass
@@ -126,6 +137,18 @@ class Transaction:
         parts = []
         for commodity, qty in positive_amounts.items():
             style = styles.get(commodity, AmountStyle())
+            # Cap currency amounts (left-side symbol, e.g. €) to 2 decimal
+            # places for display. Named commodities (XEON, BTC on the right)
+            # keep their natural precision.
+            if style.commodity_side == "L" and style.precision > 2:
+                style = AmountStyle(
+                    commodity_side=style.commodity_side,
+                    commodity_spaced=style.commodity_spaced,
+                    decimal_mark=style.decimal_mark,
+                    digit_group_separator=style.digit_group_separator,
+                    digit_group_sizes=style.digit_group_sizes,
+                    precision=2,
+                )
             amt = Amount(commodity=commodity, quantity=qty, style=style)
             parts.append(amt.format())
         return ", ".join(parts)

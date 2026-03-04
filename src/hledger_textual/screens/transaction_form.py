@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -15,7 +16,13 @@ from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Select, Static
 
 from hledger_textual.config import load_default_commodity
-from hledger_textual.hledger import HledgerError, load_accounts, load_descriptions
+from hledger_textual.hledger import (
+    HledgerError,
+    load_accounts,
+    load_descriptions,
+    load_investment_cost,
+    load_investment_positions,
+)
 from hledger_textual.models import (
     Amount,
     AmountStyle,
@@ -28,6 +35,208 @@ from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# ---------------------------------------------------------------------------
+# Hledger amount string parser
+# ---------------------------------------------------------------------------
+_SYM = r"[€$£¥₿₹]"
+_NAME = r"[A-Za-z][A-Za-z0-9.]*"
+_COMMODITY = rf"(?:{_SYM}|{_NAME})"
+_UNSIGNED_QTY = r"\d+(?:\.\d+)?"
+_SIGNED_QTY = r"-?\d+(?:\.\d+)?"
+
+# -5.00 XEON @@ €742.59  OR  -5.00 XEON @ €148.518
+_AMOUNT_COST_RE = re.compile(rf"^({_SIGNED_QTY})\s+({_COMMODITY})\s+(@@?)\s+(.+)$")
+# -5.00 XEON  OR  5 USD
+_AMOUNT_QTY_COMM_RE = re.compile(rf"^({_SIGNED_QTY})\s+({_COMMODITY})\s*$")
+# €742.59  OR  -€742.59
+_AMOUNT_SYM_QTY_RE = re.compile(rf"^(-?)({_SYM})({_UNSIGNED_QTY})\s*$")
+
+
+def _decimal_places(qty_str: str) -> int:
+    """Return the number of decimal places in a numeric string."""
+    return len(qty_str.split(".")[1]) if "." in qty_str else 0
+
+
+def _extract_commodity_and_qty(
+    s: str,
+) -> tuple[Decimal, str, Decimal | None] | None:
+    """Extract signed quantity, commodity name, and optional total proceeds.
+
+    Handles amounts with named commodities such as ``-5 XEON`` or
+    ``-5 XEON @@ €742.55``.  Returns ``None`` for currency-symbol-prefixed
+    amounts (``€50``) and plain numbers.
+
+    Args:
+        s: Raw amount string entered by the user.
+
+    Returns:
+        ``(signed_qty, commodity, proceeds)`` when a named commodity is found,
+        else ``None``.  ``signed_qty`` preserves the original sign so callers
+        can distinguish sells (negative) from buys (positive).  ``proceeds``
+        is the total transaction value when a cost annotation (``@`` or ``@@``)
+        is present and parseable, otherwise ``None``.
+    """
+    s = s.strip()
+    m = _AMOUNT_COST_RE.match(s)
+    if m:
+        qty_str, commodity, at_sign, cost_str = (
+            m.group(1), m.group(2), m.group(3), m.group(4)
+        )
+        qty = Decimal(qty_str)
+        proceeds: Decimal | None = None
+        cost_amount = _parse_simple_amount_str(cost_str.strip(), "")
+        if cost_amount is not None:
+            if at_sign == "@":
+                proceeds = abs(cost_amount.quantity) * abs(qty)
+            else:  # @@
+                proceeds = abs(cost_amount.quantity)
+        return qty, commodity, proceeds
+    m = _AMOUNT_QTY_COMM_RE.match(s)
+    if m:
+        qty_str, commodity = m.groups()
+        return Decimal(qty_str), commodity, None
+    return None
+
+
+def _build_commodity_data(
+    positions: list[tuple[str, Decimal, str]],
+    costs: dict[str, tuple[Decimal, str]],
+) -> dict[str, tuple[Decimal, Decimal, str]]:
+    """Build a per-commodity summary of positions and book costs.
+
+    Cross-joins positions and costs by account.  If any account contributing
+    to a commodity has no cost entry, that commodity is excluded entirely.
+
+    Args:
+        positions: ``(account, quantity, commodity)`` from
+            :func:`load_investment_positions`.
+        costs: ``{account: (cost_amount, currency)}`` from
+            :func:`load_investment_cost`.
+
+    Returns:
+        ``{commodity: (total_units, total_cost, currency)}``.
+        Commodities with zero or negative total units are excluded.
+    """
+    units: dict[str, Decimal] = {}
+    total_cost: dict[str, Decimal] = {}
+    currency_map: dict[str, str] = {}
+    excluded: set[str] = set()
+
+    for account, qty, commodity in positions:
+        if commodity in excluded:
+            continue
+        if account not in costs:
+            excluded.add(commodity)
+            units.pop(commodity, None)
+            total_cost.pop(commodity, None)
+            currency_map.pop(commodity, None)
+            continue
+        cost_amount, currency = costs[account]
+        units[commodity] = units.get(commodity, Decimal(0)) + qty
+        total_cost[commodity] = total_cost.get(commodity, Decimal(0)) + cost_amount
+        if commodity not in currency_map:
+            currency_map[commodity] = currency
+
+    result: dict[str, tuple[Decimal, Decimal, str]] = {}
+    for commodity, total_units in units.items():
+        if total_units <= 0:
+            continue
+        result[commodity] = (
+            total_units,
+            total_cost.get(commodity, Decimal(0)),
+            currency_map.get(commodity, ""),
+        )
+    return result
+
+
+def _parse_simple_amount_str(s: str, default_commodity: str) -> Amount | None:
+    """Parse a simple hledger amount string (no cost annotation).
+
+    Handles: ``€742.59``, ``-€742.59``, ``-5.00 XEON``, ``742.59``.
+    Returns None if the string cannot be parsed.
+    """
+    s = s.strip()
+
+    m = _AMOUNT_SYM_QTY_RE.match(s)
+    if m:
+        sign, sym, qty_str = m.groups()
+        qty = Decimal(f"{sign}{qty_str}")
+        style = AmountStyle(
+            commodity_side="L",
+            commodity_spaced=False,
+            precision=max(_decimal_places(qty_str), 2),
+        )
+        return Amount(commodity=sym, quantity=qty, style=style)
+
+    m = _AMOUNT_QTY_COMM_RE.match(s)
+    if m:
+        qty_str, commodity = m.groups()
+        qty = Decimal(qty_str)
+        style = AmountStyle(
+            commodity_side="R",
+            commodity_spaced=True,
+            precision=_decimal_places(qty_str),
+        )
+        return Amount(commodity=commodity, quantity=qty, style=style)
+
+    try:
+        qty = Decimal(s)
+        style = AmountStyle(
+            commodity_side="L" if not default_commodity[:1].isdigit() else "R",
+            commodity_spaced=len(default_commodity) > 1,
+            precision=max(_decimal_places(s), 2),
+        )
+        return Amount(commodity=default_commodity, quantity=qty, style=style)
+    except InvalidOperation:
+        return None
+
+
+def parse_amount_str(s: str, default_commodity: str) -> Amount | None:
+    """Parse a hledger amount string including an optional cost annotation.
+
+    Supports:
+
+    - Simple number: ``742.59``, ``-742.59``
+    - Currency prefix: ``€742.59``, ``-€742.59``
+    - Quantity + commodity: ``-5.00 XEON``, ``5 USD``
+    - With total cost: ``-5.00 XEON @@ €742.59``
+    - With unit cost: ``-5.00 XEON @ €148.518`` (converted to total cost)
+
+    Returns None if the string cannot be parsed.
+    """
+    s = s.strip()
+    if not s:
+        return None
+
+    m = _AMOUNT_COST_RE.match(s)
+    if m:
+        qty_str, commodity, at_sign, cost_str = m.groups()
+        qty = Decimal(qty_str)
+        style = AmountStyle(
+            commodity_side="R",
+            commodity_spaced=True,
+            precision=_decimal_places(qty_str),
+        )
+        cost_amount = _parse_simple_amount_str(cost_str.strip(), default_commodity)
+        if cost_amount is None:
+            return None
+        if at_sign == "@":
+            cost_amount = Amount(
+                commodity=cost_amount.commodity,
+                quantity=abs(cost_amount.quantity * qty),
+                style=cost_amount.style,
+            )
+        else:
+            # Normalise @@ cost to always positive (hledger requires it).
+            cost_amount = Amount(
+                commodity=cost_amount.commodity,
+                quantity=abs(cost_amount.quantity),
+                style=cost_amount.style,
+            )
+        return Amount(commodity=commodity, quantity=qty, style=style, cost=cost_amount)
+
+    return _parse_simple_amount_str(s, default_commodity)
 
 STATUS_OPTIONS = [
     ("Unmarked", TransactionStatus.UNMARKED),
@@ -59,6 +268,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
         self.transaction = transaction
         self.posting_count = 0
         self.accounts: list[str] = []
+        self.commodity_data: dict[str, tuple[Decimal, Decimal, str]] = {}
 
     @property
     def is_edit(self) -> bool:
@@ -122,7 +332,14 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
 
                 # Postings section
                 yield Static("Postings", id="postings-header")
+                yield Static(
+                    "Amount supports hledger syntax: plain number (50.00), currency prefix "
+                    "(€50.00), or commodity with cost (-5 STCK @@ €200.00 / -5 STCK @ €40.00). "
+                    "Leave one amount blank to auto-balance (e.g. #1: Assets:Bank -100, #2: Expenses:Food blank).",
+                    id="postings-hint",
+                )
                 yield Vertical(id="postings-container")
+                yield Static("", id="cost-basis-hint")
 
                 with Horizontal(id="posting-buttons"):
                     yield Button("\\[+] Add posting", id="btn-add-posting")
@@ -148,14 +365,20 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 SuggestFromList(descriptions, case_sensitive=False)
             )
 
+        self._load_commodity_data()
+
         if self.is_edit and self.transaction:
             for i, posting in enumerate(self.transaction.postings):
                 amount_str = ""
-                commodity = ""
+                commodity = load_default_commodity()
                 if posting.amounts:
                     amt = posting.amounts[0]
-                    amount_str = f"{amt.quantity:.2f}"
-                    commodity = amt.commodity
+                    if amt.cost is not None:
+                        # Complex amount with cost annotation: preserve as full string.
+                        amount_str = amt.format()
+                    else:
+                        amount_str = f"{amt.quantity:.{amt.style.precision}f}"
+                        commodity = amt.commodity
                 label = f"#{i + 1}:"
                 self._add_posting_row(
                     label=label,
@@ -165,8 +388,8 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 )
         else:
             default_commodity = load_default_commodity()
-            self._add_posting_row(label="Debit:", commodity=default_commodity)
-            self._add_posting_row(label="Credit:", commodity=default_commodity)
+            self._add_posting_row(label="#1:", commodity=default_commodity)
+            self._add_posting_row(label="#2:", commodity=default_commodity)
 
     def _add_posting_row(
         self,
@@ -179,6 +402,8 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
         container = self.query_one("#postings-container", Vertical)
         if not label:
             label = f"#{self.posting_count + 1}:"
+        if not commodity:
+            commodity = load_default_commodity()
         row = PostingRow(
             label=label,
             account=account,
@@ -199,6 +424,101 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
             self.posting_count -= 1
         else:
             self.notify("Minimum 2 postings required", severity="warning", timeout=3)
+
+    @work(thread=True, exclusive=True)
+    def _load_commodity_data(self) -> None:
+        """Load investment positions and costs in a background thread."""
+        try:
+            positions = load_investment_positions(self.journal_file)
+            costs = load_investment_cost(self.journal_file)
+            data = _build_commodity_data(positions, costs)
+        except HledgerError:
+            data = {}
+        self.app.call_from_thread(self._set_commodity_data, data)
+
+    def _set_commodity_data(self, data: dict[str, tuple[Decimal, Decimal, str]]) -> None:
+        """Update commodity data and refresh any already-typed amount hints.
+
+        Args:
+            data: Commodity summary from :func:`_build_commodity_data`.
+        """
+        self.commodity_data = data
+        hint_widget = self.query_one("#cost-basis-hint", Static)
+        container = self.query_one("#postings-container", Vertical)
+        for row in container.query(PostingRow):
+            amount_input = row.query_one(f"#amount-{row.row_index}", Input)
+            parsed = _extract_commodity_and_qty(amount_input.value)
+            if parsed:
+                qty, commodity, proceeds = parsed
+                hint = self._build_cost_hint(commodity, qty, proceeds)
+                if hint:
+                    hint_widget.update(hint)
+                    hint_widget.add_class("visible")
+                    return
+        hint_widget.update("")
+        hint_widget.remove_class("visible")
+
+    def _build_cost_hint(
+        self,
+        commodity: str,
+        qty: Decimal,
+        proceeds: Decimal | None = None,
+    ) -> str:
+        """Build a cost basis hint string for a commodity and quantity.
+
+        When ``qty`` is negative (a sell) and ``proceeds`` are provided, the
+        capital gain or loss is appended to the hint.
+
+        Args:
+            commodity: The commodity ticker (e.g. ``'XEON'``).
+            qty: Signed quantity (negative = sell, positive = buy).
+            proceeds: Total sale proceeds when a cost annotation is present.
+
+        Returns:
+            A formatted hint string, or empty string if commodity not in data.
+        """
+        if commodity not in self.commodity_data:
+            return ""
+        total_units, total_cost, currency = self.commodity_data[commodity]
+        avg_cost = total_cost / total_units
+        abs_qty = abs(qty)
+        cost_basis = abs_qty * avg_cost
+
+        def _fmt(d: Decimal) -> str:
+            return format(d.normalize(), "f")
+
+        hint = (
+            f"{commodity}: {_fmt(total_units)} units · "
+            f"avg {currency}{avg_cost:.2f}/unit · "
+            f"cost basis for {_fmt(abs_qty)} units ≈ {currency}{cost_basis:.2f}"
+        )
+
+        if qty < 0 and proceeds is not None:
+            gain = proceeds - cost_basis
+            sign = "+" if gain >= 0 else ""
+            hint += f" · gain ≈ {sign}{currency}{gain:.2f}"
+
+        return hint
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Update cost basis hint when an amount field changes.
+
+        Args:
+            event: The Input.Changed event from any input in the form.
+        """
+        if not event.input.id or not event.input.id.startswith("amount-"):
+            return
+        hint_widget = self.query_one("#cost-basis-hint", Static)
+        parsed = _extract_commodity_and_qty(event.value)
+        if parsed:
+            qty, commodity, proceeds = parsed
+            hint = self._build_cost_hint(commodity, qty, proceeds)
+            if hint:
+                hint_widget.update(hint)
+                hint_widget.add_class("visible")
+                return
+        hint_widget.update("")
+        hint_widget.remove_class("visible")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -296,28 +616,17 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
 
             amounts: list[Amount] = []
             if row.amount:
-                try:
-                    qty = Decimal(row.amount)
-                except InvalidOperation:
+                default_commodity = row.commodity or load_default_commodity()
+                amount = parse_amount_str(row.amount, default_commodity)
+                if amount is None:
                     self.notify(
-                        f"Invalid amount: {row.amount}",
+                        f"Invalid amount: \"{row.amount}\". "
+                        "Use: 50.00 | €50.00 | -5 STCK @@ €200.00 | -5 STCK @ €40.00",
                         severity="error",
-                        timeout=3,
+                        timeout=6,
                     )
                     return
-
-                commodity = row.commodity or load_default_commodity()
-                style = AmountStyle(
-                    commodity_side="L" if not commodity[0].isdigit() else "R",
-                    commodity_spaced=len(commodity) > 1,
-                    precision=max(
-                        abs(qty.as_tuple().exponent)
-                        if isinstance(qty.as_tuple().exponent, int)
-                        else 2,
-                        2,
-                    ),
-                )
-                amounts.append(Amount(commodity=commodity, quantity=qty, style=style))
+                amounts.append(amount)
 
             postings.append(Posting(account=account, amounts=amounts))
 
@@ -330,6 +639,27 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
             return
 
         postings = self._omit_balancing_amount(postings)
+
+        # Pre-save balance check: only for simple single-commodity transactions
+        # where every posting has exactly one plain amount (no cost annotation).
+        # Cross-commodity and cost-annotation cases are delegated to hledger.
+        all_plain = all(
+            len(p.amounts) == 1 and p.amounts[0].cost is None
+            for p in postings
+        )
+        if all_plain:
+            commodities = {p.amounts[0].commodity for p in postings}
+            if len(commodities) == 1:
+                total = sum(p.amounts[0].quantity for p in postings)
+                if total != 0:
+                    commodity_sym = next(iter(commodities))
+                    self.notify(
+                        f"Transaction is unbalanced (sum: {total:+g} {commodity_sym}). "
+                        "Negate one amount or leave one blank to auto-balance.",
+                        severity="error",
+                        timeout=6,
+                    )
+                    return
 
         transaction = Transaction(
             index=0,

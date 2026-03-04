@@ -15,7 +15,7 @@ from textual.widgets import Button, Input, Label, Static
 from hledger_textual.config import load_default_commodity
 from hledger_textual.hledger import HledgerError, load_accounts
 from hledger_textual.models import Amount, AmountStyle, BudgetRule
-from hledger_textual.widgets.amount_input import AmountInput
+from hledger_textual.widgets.amount_input import NumericAmountInput
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 
@@ -63,7 +63,7 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
 
             with Horizontal(classes="form-field"):
                 yield Label("Amount:")
-                yield AmountInput(
+                yield NumericAmountInput(
                     value=f"{self.rule.amount.quantity:.2f}" if self.is_edit else "",
                     id="budget-input-amount",
                 )

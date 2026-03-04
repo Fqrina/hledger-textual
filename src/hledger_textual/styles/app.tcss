@@ -360,7 +360,13 @@ TransactionFormScreen {
 #postings-header {
     text-style: bold;
     margin-top: 1;
+    margin-bottom: 0;
+}
+
+#postings-hint {
+    color: $text-muted;
     margin-bottom: 1;
+    text-style: italic;
 }
 
 #postings-container {
@@ -396,6 +402,17 @@ PostingRow {
 
 .posting-row .commodity-input {
     width: 8;
+}
+
+#cost-basis-hint {
+    display: none;
+    color: $accent;
+    text-style: italic;
+    margin-bottom: 1;
+}
+
+#cost-basis-hint.visible {
+    display: block;
 }
 
 #posting-buttons {

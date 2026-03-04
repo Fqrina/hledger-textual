@@ -59,6 +59,29 @@ class TestAmount:
         amt = Amount(commodity="BTC", quantity=Decimal("0.0001"), style=style)
         assert amt.format() == "0.0001 BTC"
 
+    def test_format_with_cost_annotation(self):
+        """Amount with a cost annotates the output with @@ and the cost amount."""
+        cost_style = AmountStyle(commodity_side="L", commodity_spaced=False, precision=2)
+        cost = Amount(commodity="€", quantity=Decimal("200.00"), style=cost_style)
+        style = AmountStyle(commodity_side="R", commodity_spaced=True, precision=2)
+        amt = Amount(commodity="STCK", quantity=Decimal("-10.00"), style=style, cost=cost)
+        assert amt.format() == "-10.00 STCK @@ €200.00"
+
+    def test_format_without_cost_unchanged(self):
+        """Amount without cost produces the same output as before."""
+        style = AmountStyle(commodity_side="L", commodity_spaced=False, precision=2)
+        amt = Amount(commodity="€", quantity=Decimal("100.00"), style=style)
+        assert amt.format() == "€100.00"
+
+    def test_format_negative_cost_normalised(self):
+        """A negative cost quantity is always written as positive in the @@ annotation."""
+        cost_style = AmountStyle(commodity_side="L", commodity_spaced=False, precision=2)
+        # Simulates what hledger JSON may produce for a sell transaction.
+        cost = Amount(commodity="€", quantity=Decimal("-200.00"), style=cost_style)
+        style = AmountStyle(commodity_side="R", commodity_spaced=True, precision=2)
+        amt = Amount(commodity="STCK", quantity=Decimal("-10.00"), style=style, cost=cost)
+        assert amt.format() == "-10.00 STCK @@ €200.00"
+
 
 class TestTransaction:
     """Tests for Transaction properties."""
