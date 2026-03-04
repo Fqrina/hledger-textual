@@ -9,7 +9,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
-from hledger_textual.config import load_theme, save_theme
+from hledger_textual.config import load_theme
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
 from hledger_textual.widgets.info_pane import InfoPane
@@ -64,7 +64,6 @@ class HledgerTuiApp(App):
         Binding("7", "switch_section('info')", "Info", show=False),
         Binding("s", "git_sync", "Sync", show=False),
         Binding("q", "quit", "Quit"),
-        Binding("t", "pick_theme", "Theme", show=False),
     ]
 
     def __init__(self, journal_file: Path) -> None:
@@ -201,15 +200,3 @@ class HledgerTuiApp(App):
         self.app.call_from_thread(
             self.query_one(InfoPane).refresh_git_status
         )
-
-    def action_pick_theme(self) -> None:
-        """Open the theme picker dialog."""
-        from hledger_textual.screens.theme_picker import ThemePickerModal
-
-        def on_theme_selected(theme: str | None) -> None:
-            if theme is not None:
-                self.theme = theme
-                save_theme(theme)
-                self.query_one(InfoPane).apply_theme(theme)
-
-        self.push_screen(ThemePickerModal(), callback=on_theme_selected)
