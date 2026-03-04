@@ -367,7 +367,7 @@ class TestFormSave:
             rows = list(form.query(PostingRow))
             rows[0].query_one("#account-0", Input).value = "expenses:food"
             rows[0].query_one("#amount-0", Input).value = "25.00"
-            rows[0].query_one("#commodity-0", Input).value = "EUR"
+            # commodity is now a read-only label; the amount embeds the currency instead
             rows[1].query_one("#account-1", Input).value = "assets:bank:checking"
 
             form._save()
@@ -722,8 +722,8 @@ class TestDefaultCommodity:
     async def test_new_form_prefills_commodity_from_config(
         self, app: HledgerTuiApp, monkeypatch
     ):
-        """New transaction form pre-fills the commodity field with the configured default."""
-        from textual.widgets import Input
+        """New transaction form shows the configured default commodity in the hint."""
+        from textual.widgets import Static
 
         monkeypatch.setattr(
             "hledger_textual.screens.transaction_form.load_default_commodity",
@@ -736,9 +736,8 @@ class TestDefaultCommodity:
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
-            rows = list(form.query(PostingRow))
-            commodity_val = rows[0].query_one("#commodity-0", Input).value
-            assert commodity_val == "\u20ac"
+            hint = form.query_one("#default-commodity-hint", Static)
+            assert "\u20ac" in hint.renderable
 
 
 class TestParseAmountStr:

@@ -400,8 +400,10 @@ PostingRow {
     margin-right: 1;
 }
 
-.posting-row .commodity-input {
-    width: 8;
+#default-commodity-hint {
+    color: $text-muted;
+    text-style: italic;
+    margin-bottom: 1;
 }
 
 #cost-basis-hint {

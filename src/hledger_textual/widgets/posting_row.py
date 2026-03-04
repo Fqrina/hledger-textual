@@ -13,7 +13,12 @@ from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 
 class PostingRow(Widget):
-    """A single posting row with account (with autocomplete), amount, and commodity inputs."""
+    """A single posting row with account (with autocomplete) and amount inputs.
+
+    The default commodity is displayed as a read-only label next to the amount
+    field. Users can override it by including the currency or commodity directly
+    in the amount string (e.g. ``€50.00``, ``-5 XEON @@ €742.55``).
+    """
 
     def __init__(
         self,
@@ -30,7 +35,7 @@ class PostingRow(Widget):
             label: Label for this posting row.
             account: Initial account name.
             amount: Initial amount string.
-            commodity: Initial commodity symbol.
+            commodity: Default commodity shown as a label (e.g. ``€``).
             row_index: Index of this row.
             account_suggestions: List of account names for autocomplete.
         """
@@ -64,12 +69,6 @@ class PostingRow(Widget):
                 classes="amount-input",
                 id=f"amount-{self.row_index}",
             )
-            yield Input(
-                value=self.initial_commodity,
-                placeholder=self.initial_commodity or "$",
-                classes="commodity-input",
-                id=f"commodity-{self.row_index}",
-            )
 
     @property
     def account(self) -> str:
@@ -83,5 +82,5 @@ class PostingRow(Widget):
 
     @property
     def commodity(self) -> str:
-        """Get the current commodity value."""
-        return self.query_one(f"#commodity-{self.row_index}", Input).value.strip()
+        """Get the default commodity (static label value)."""
+        return self.initial_commodity

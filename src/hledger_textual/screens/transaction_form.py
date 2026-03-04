@@ -333,10 +333,14 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 # Postings section
                 yield Static("Postings", id="postings-header")
                 yield Static(
-                    "Amount supports hledger syntax: plain number (50.00), currency prefix "
-                    "(€50.00), or commodity with cost (-5 STCK @@ €200.00 / -5 STCK @ €40.00). "
-                    "Leave one amount blank to auto-balance (e.g. #1: Assets:Bank -100, #2: Expenses:Food blank).",
+                    "Amount: plain number (50.00), currency prefix (€50.00), "
+                    "or commodity with cost (-5 STCK @@ €200.00 / -5 STCK @ €40.00). "
+                    "Leave one amount blank to auto-balance.",
                     id="postings-hint",
+                )
+                yield Static(
+                    f"Default commodity: {load_default_commodity()}",
+                    id="default-commodity-hint",
                 )
                 yield Vertical(id="postings-container")
                 yield Static("", id="cost-basis-hint")
