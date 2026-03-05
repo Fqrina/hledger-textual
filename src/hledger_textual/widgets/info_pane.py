@@ -7,6 +7,7 @@ from pathlib import Path
 
 from textual import work
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Static
@@ -39,7 +40,9 @@ class InfoPane(Widget):
 
     CAN_FOCUS = True
 
-    BINDINGS: list[Binding] = []
+    BINDINGS = [
+        Binding("t", "pick_theme", "Theme", show=True, priority=True),
+    ]
 
     def __init__(self, journal_file: Path, **kwargs) -> None:
         """Initialize the info pane.
@@ -275,3 +278,16 @@ class InfoPane(Widget):
     def refresh_git_status(self) -> None:
         """Reload git info (called after a sync operation)."""
         self._load_git_info()
+
+    def action_pick_theme(self) -> None:
+        """Open the theme picker dialog."""
+        from hledger_textual.config import save_theme
+        from hledger_textual.screens.theme_picker import ThemePickerModal
+
+        def on_theme_selected(theme: str | None) -> None:
+            if theme is not None:
+                self.app.theme = theme
+                save_theme(theme)
+                self.apply_theme(theme)
+
+        self.app.push_screen(ThemePickerModal(), callback=on_theme_selected)
