@@ -470,3 +470,79 @@ class TestGroupPositionsByCommodity:
             assert result == {}
 
 
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestSummaryPaneLiabilities:
+    """Tests for the liabilities section in SummaryPane."""
+
+    @pytest.fixture
+    def liabilities_journal(self, tmp_path: Path) -> Path:
+        """A journal with liability accounts and current-month transactions."""
+        today = date.today()
+        d1 = today.replace(day=1)
+        content = (
+            "2026-01-01 Mortgage\n"
+            "    liabilities:mortgage          €-200000.00\n"
+            "    assets:bank:checking\n"
+            "\n"
+            f"{d1.isoformat()} * Grocery shopping\n"
+            "    expenses:food              €40.80\n"
+            "    assets:bank:checking\n"
+            "\n"
+            f"{d1.isoformat()} Salary\n"
+            "    assets:bank:checking     €3000.00\n"
+            "    income:salary\n"
+        )
+        journal = tmp_path / "test.journal"
+        journal.write_text(content)
+        return journal
+
+    async def test_liabilities_table_exists(self, summary_journal: Path):
+        """The liabilities DataTable is present in the widget tree."""
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            table = app.query_one("#summary-liabilities-table")
+            assert table is not None
+
+    async def test_liabilities_hidden_when_empty(self, summary_journal: Path):
+        """Liabilities section is hidden when no liability accounts exist."""
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            section = app.query_one("#summary-liabilities")
+            assert section.display is False
+
+    async def test_liabilities_shown_when_present(self, liabilities_journal: Path):
+        """Liabilities section is visible when liability accounts exist."""
+        app = _SummaryApp(liabilities_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            section = app.query_one("#summary-liabilities")
+            assert section.display is True
+
+    async def test_liabilities_table_has_rows(self, liabilities_journal: Path):
+        """Liabilities table has rows when liabilities exist."""
+        app = _SummaryApp(liabilities_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            table = app.query_one("#summary-liabilities-table", DataTable)
+            assert table.row_count > 0
+
+    async def test_liabilities_error_does_not_crash(
+        self, summary_journal: Path, monkeypatch
+    ):
+        """HledgerError during liabilities load is silently handled."""
+        from hledger_textual.hledger import HledgerError
+
+        def _raise(*args, **kwargs):
+            raise HledgerError("liabilities failed")
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_liabilities_breakdown", _raise
+        )
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            assert app.query_one(SummaryPane) is not None
+
+

@@ -632,6 +632,45 @@ def load_income_breakdown(
     return _load_account_breakdown(file, "type:R", period)
 
 
+def load_liabilities_breakdown(
+    file: str | Path,
+) -> list[tuple[str, Decimal, str]]:
+    """Load per-account liabilities breakdown (total outstanding balance).
+
+    Uses ``type:L`` to match liability accounts and returns the current
+    total balance (no period filter), sorted by amount descending.
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A list of ``(account, quantity, commodity)`` tuples sorted by
+        amount descending.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger(
+        "balance", "type:L",
+        "--flat", "--no-total", "-O", "csv",
+        file=file,
+    )
+
+    results: list[tuple[str, Decimal, str]] = []
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        account = row[0].strip()
+        qty, com = _parse_budget_amount(row[1].strip())
+        if qty:
+            results.append((account, abs(qty), com))
+
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results
+
+
 def load_investment_positions(
     file: str | Path,
 ) -> list[tuple[str, Decimal, str]]:

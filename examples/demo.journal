@@ -1,9 +1,17 @@
+include recurring.journal
+
 include budget.journal
 
 ; hledger-textual demo journal
 ; Nine months of realistic personal finance data (Jul 2025 – Mar 2026)
 
 include demo-budget.journal
+
+; === Mortgage (opened July 2025) ===
+
+2025-07-01 * Mortgage disbursement  ; 25-year fixed rate
+    assets:bank:checking            €180000.00
+    liabilities:mortgage
 
 ; === July 2025 ===
 
@@ -76,6 +84,16 @@ include demo-budget.journal
     expenses:transport                    €16.50
     assets:bank:checking
 
+2025-07-30 * Mortgage payment  ; monthly instalment
+    liabilities:mortgage               €620.00
+    expenses:housing:interest          €180.00
+    assets:bank:checking
+
+2025-07-31 * Credit card statement
+    liabilities:credit-card            €-145.00
+    expenses:shopping                   €95.00
+    expenses:food:restaurant            €50.00
+
 ; === August 2025 ===
 
 2025-08-01 * (SAL-202508) Monthly salary
@@ -142,6 +160,16 @@ include demo-budget.journal
 2025-08-27 * Taxi ride
     expenses:transport                    €22.00
     assets:bank:checking
+
+2025-08-30 * Mortgage payment
+    liabilities:mortgage               €620.00
+    expenses:housing:interest          €178.50
+    assets:bank:checking
+
+2025-08-31 * Credit card statement
+    liabilities:credit-card            €-210.00
+    expenses:shopping                  €130.00
+    expenses:food:restaurant            €80.00
 
 ; === September 2025 ===
 
@@ -214,6 +242,16 @@ include demo-budget.journal
     expenses:transport                    €14.50
     assets:bank:checking
 
+2025-09-29 * Mortgage payment
+    liabilities:mortgage               €620.00
+    expenses:housing:interest          €177.00
+    assets:bank:checking
+
+2025-09-30 * Credit card statement
+    liabilities:credit-card            €-175.00
+    expenses:shopping                  €110.00
+    expenses:food:restaurant            €65.00
+
 ; === October 2025 ===
 
 2025-10-01 * (SAL-202510) Monthly salary
@@ -231,6 +269,10 @@ include demo-budget.journal
 2025-10-04 Transfer to savings
     assets:bank:savings                  €500.00
     assets:bank:checking
+
+2025-10-05 * Car loan disbursement  ; 5-year loan
+    assets:bank:checking             €15000.00
+    liabilities:loan:car
 
 2025-10-06 * Annual insurance premium
     expenses:insurance                   €420.00
@@ -280,6 +322,21 @@ include demo-budget.journal
 2025-10-27 * Taxi ride
     expenses:transport                    €19.00
     assets:bank:checking
+
+2025-10-30 * Mortgage payment
+    liabilities:mortgage               €620.00
+    expenses:housing:interest          €175.50
+    assets:bank:checking
+
+2025-10-30 * Car loan payment
+    liabilities:loan:car               €250.00
+    expenses:transport:interest         €45.00
+    assets:bank:checking
+
+2025-10-31 * Credit card statement
+    liabilities:credit-card            €-190.00
+    expenses:shopping                  €120.00
+    expenses:food:restaurant            €70.00
 
 ; === November 2025 ===
 
@@ -352,6 +409,21 @@ include demo-budget.journal
     expenses:transport                    €13.50
     assets:bank:checking
 
+2025-11-29 * Mortgage payment
+    liabilities:mortgage               €620.00
+    expenses:housing:interest          €174.00
+    assets:bank:checking
+
+2025-11-29 * Car loan payment
+    liabilities:loan:car               €250.00
+    expenses:transport:interest         €44.00
+    assets:bank:checking
+
+2025-11-30 * Credit card statement
+    liabilities:credit-card            €-160.00
+    expenses:shopping                  €100.00
+    expenses:food:restaurant            €60.00
+
 ; === December 2025 ===
 
 2025-12-01 * (SAL-202512) Monthly salary
@@ -422,6 +494,21 @@ include demo-budget.journal
 2025-12-29 * Taxi ride
     expenses:transport                    €20.50
     assets:bank:checking
+
+2025-12-30 * Mortgage payment
+    liabilities:mortgage               €620.00
+    expenses:housing:interest          €172.50
+    assets:bank:checking
+
+2025-12-30 * Car loan payment
+    liabilities:loan:car               €250.00
+    expenses:transport:interest         €43.00
+    assets:bank:checking
+
+2025-12-31 * Credit card statement
+    liabilities:credit-card            €-280.00
+    expenses:shopping                  €200.00
+    expenses:food:restaurant            €80.00
 
 ; === January 2026 ===
 
@@ -506,6 +593,21 @@ include demo-budget.journal
     expenses:food:restaurant              €31.00
     assets:bank:checking
 
+2026-01-30 * Mortgage payment
+    liabilities:mortgage               €620.00
+    expenses:housing:interest          €171.00
+    assets:bank:checking
+
+2026-01-30 * Car loan payment
+    liabilities:loan:car               €250.00
+    expenses:transport:interest         €42.00
+    assets:bank:checking
+
+2026-01-31 * Credit card statement
+    liabilities:credit-card            €-155.00
+    expenses:shopping                   €95.00
+    expenses:food:restaurant            €60.00
+
 ; === February 2026 ===
 
 2026-02-01 * (SAL-202602) Monthly salary
@@ -589,6 +691,21 @@ include demo-budget.journal
     expenses:food:groceries               €71.40
     assets:bank:checking
 
+2026-02-27 * Mortgage payment
+    liabilities:mortgage               €620.00
+    expenses:housing:interest          €169.50
+    assets:bank:checking
+
+2026-02-27 * Car loan payment
+    liabilities:loan:car               €250.00
+    expenses:transport:interest         €41.00
+    assets:bank:checking
+
+2026-02-28 * Credit card statement
+    liabilities:credit-card            €-185.00
+    expenses:shopping                  €115.00
+    expenses:food:restaurant            €70.00
+
 ; === March 2026 ===
 
 2026-03-01 * (SAL-202603) Monthly salary
@@ -598,3 +715,18 @@ include demo-budget.journal
 2026-03-02 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
+
+2026-03-02 * Mortgage payment
+    liabilities:mortgage               €620.00
+    expenses:housing:interest          €168.00
+    assets:bank:checking
+
+2026-03-02 * Car loan payment
+    liabilities:loan:car               €250.00
+    expenses:transport:interest         €40.00
+    assets:bank:checking
+
+2026-03-03 * Credit card statement
+    liabilities:credit-card            €-170.00
+    expenses:shopping                  €105.00
+    expenses:food:restaurant            €65.00

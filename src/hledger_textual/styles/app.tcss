@@ -65,11 +65,21 @@ SummaryPane {
 
 /* --- Summary Sections --- */
 
-#summary-portfolio {
+#summary-liabilities {
     height: auto;
     padding: 0 1;
     margin-top: 1;
-    margin-bottom: 1;
+}
+
+#summary-liabilities-table {
+    height: auto;
+    max-height: 20;
+    overflow-x: hidden;
+}
+
+#summary-portfolio {
+    height: auto;
+    padding: 0 1;
 }
 
 #summary-portfolio-table {
@@ -79,8 +89,15 @@ SummaryPane {
 
 .summary-portfolio-loading-line {
     padding: 0 1;
-    margin-top: 1;
     color: $text-muted;
+}
+
+/* Divider between all-time sections and monthly sections */
+#summary-income-breakdown {
+    height: auto;
+    padding: 0 1;
+    margin-top: 1;
+    border-top: solid $panel;
 }
 
 #summary-breakdown {
@@ -138,11 +155,6 @@ PeriodSummaryCards {
 }
 
 /* --- Income Breakdown --- */
-
-#summary-income-breakdown {
-    height: auto;
-    padding: 0 1;
-}
 
 #summary-income-table {
     height: auto;

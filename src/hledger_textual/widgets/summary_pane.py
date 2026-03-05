@@ -30,6 +30,7 @@ from hledger_textual.hledger import (
     load_investment_cost,
     load_investment_eur_by_account,
     load_investment_positions,
+    load_liabilities_breakdown,
     load_period_summary,
 )
 from hledger_textual.prices import PriceError, get_prices_file, has_pricehist
@@ -90,6 +91,15 @@ class SummaryPane(Widget):
         )
         yield PeriodSummaryCards(id="summary-cards")
 
+        # Liabilities section (total outstanding balance)
+        with Vertical(id="summary-liabilities"):
+            yield Static(
+                "Liabilities",
+                id="summary-liabilities-title",
+                classes="summary-section-title",
+            )
+            yield _DisplayTable(id="summary-liabilities-table", show_cursor=False)
+
         # Investments section
         with Vertical(id="summary-portfolio"):
             yield Static(
@@ -132,6 +142,12 @@ class SummaryPane(Widget):
         portfolio_table.add_column("Balance", width=self._PORTFOLIO_FIXED[2])
         portfolio_table.add_column("Market Value", width=self._PORTFOLIO_FIXED[3])
 
+        liabilities_table = self.query_one("#summary-liabilities-table", _DisplayTable)
+        liabilities_table.cursor_type = "none"
+        liabilities_table.add_column("Account", width=20)
+        liabilities_table.add_column("Amount", width=self._BREAKDOWN_FIXED[1])
+        liabilities_table.add_column("% of total", width=self._BREAKDOWN_FIXED[2])
+
         income_table = self.query_one("#summary-income-table", DataTable)
         income_table.cursor_type = "none"
         income_table.show_cursor = False
@@ -153,6 +169,8 @@ class SummaryPane(Widget):
         """Recalculate flex column widths for all tables."""
         ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
         distribute_column_widths(ptable, self._PORTFOLIO_FIXED)
+        ltable = self.query_one("#summary-liabilities-table", _DisplayTable)
+        distribute_column_widths(ltable, self._BREAKDOWN_FIXED)
         itable = self.query_one("#summary-income-table", DataTable)
         distribute_column_widths(itable, self._BREAKDOWN_FIXED)
         btable = self.query_one("#summary-breakdown-table", DataTable)
@@ -208,6 +226,12 @@ class SummaryPane(Widget):
         except HledgerError:
             summary = None
 
+        # --- Liabilities: total outstanding balance ---
+        try:
+            liabilities = load_liabilities_breakdown(self.journal_file)
+        except HledgerError:
+            liabilities = []
+
         # --- Investments: positions + cost (fast hledger) ---
         try:
             positions = load_investment_positions(self.journal_file)
@@ -239,12 +263,13 @@ class SummaryPane(Widget):
         else:
             loading_msg = ""
 
-        # First UI update: cards + basic investments
+        # First UI update: cards + basic investments + liabilities
         self.app.call_from_thread(
             self._apply_static_data,
             summary,
             positions, cost_by_account,
             tickers, loading_msg,
+            liabilities,
         )
 
         if not will_fetch:
@@ -286,8 +311,9 @@ class SummaryPane(Widget):
         cost_by_account: dict[str, tuple[Decimal, str]],
         tickers: dict[str, str],
         loading_msg: str,
+        liabilities: list[tuple[str, Decimal, str]] | None = None,
     ) -> None:
-        """Apply card values and basic investments (no EUR market prices)."""
+        """Apply card values, basic investments, and liabilities."""
         if not self.is_attached:
             return
         # Static overview title (all-time data)
@@ -314,6 +340,29 @@ class SummaryPane(Widget):
 
         # Loading / hint message
         self.query_one("#summary-portfolio-loading", Static).update(loading_msg)
+
+        # Liabilities table
+        if liabilities is not None:
+            ltable = self.query_one("#summary-liabilities-table", _DisplayTable)
+            ltable.clear()
+            liabilities_section = self.query_one("#summary-liabilities")
+
+            if not liabilities:
+                liabilities_section.display = False
+            else:
+                liabilities_section.display = True
+                total_liab = sum(qty for _, qty, _ in liabilities)
+                for account, qty, commodity in liabilities:
+                    pct = float(qty / total_liab * 100) if total_liab else 0.0
+                    bar = _progress_bar(pct, width=12)
+                    ltable.add_row(
+                        Text(account),
+                        fmt_amount(qty, commodity),
+                        f"{bar} {pct:.0f}%",
+                    )
+                self.call_after_refresh(
+                    distribute_column_widths, ltable, self._BREAKDOWN_FIXED
+                )
 
     def _apply_portfolio_eur(
         self,

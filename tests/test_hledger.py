@@ -22,6 +22,7 @@ from hledger_textual.hledger import (
     load_investment_positions,
     load_investment_report,
     load_journal_stats,
+    load_liabilities_breakdown,
     load_period_summary,
     load_report,
     load_transactions,
@@ -873,3 +874,60 @@ class TestAccountTypeQueries:
         )
         amounts = sorted([row[1] for row in breakdown], reverse=True)
         assert amounts == [Decimal("120.00"), Decimal("80.00")]
+
+
+# ------------------------------------------------------------------
+# Tests for load_liabilities_breakdown (require hledger)
+# ------------------------------------------------------------------
+
+
+class TestLoadLiabilitiesBreakdown:
+    """Tests for load_liabilities_breakdown."""
+
+    @pytest.fixture
+    def liabilities_journal(self, tmp_path: Path) -> Path:
+        """Create a journal with liability accounts."""
+        content = (
+            "2026-01-01 Mortgage\n"
+            "    liabilities:mortgage          €-200000.00\n"
+            "    assets:bank:checking\n"
+            "\n"
+            "2026-01-15 Credit card bill\n"
+            "    liabilities:credit-card       €-1500.00\n"
+            "    expenses:shopping              €1500.00\n"
+        )
+        journal = tmp_path / "liabilities.journal"
+        journal.write_text(content)
+        return journal
+
+    def test_returns_liability_accounts(self, liabilities_journal: Path):
+        """Both liability accounts should be returned."""
+        breakdown = load_liabilities_breakdown(liabilities_journal)
+        accounts = [row[0] for row in breakdown]
+        assert "liabilities:mortgage" in accounts
+        assert "liabilities:credit-card" in accounts
+
+    def test_sorted_by_amount_descending(self, liabilities_journal: Path):
+        """Results should be sorted by amount descending."""
+        breakdown = load_liabilities_breakdown(liabilities_journal)
+        assert len(breakdown) == 2
+        assert breakdown[0][1] >= breakdown[1][1]
+        assert breakdown[0][0] == "liabilities:mortgage"
+
+    def test_amounts_are_absolute(self, liabilities_journal: Path):
+        """Amounts should be positive (absolute values)."""
+        breakdown = load_liabilities_breakdown(liabilities_journal)
+        for _, qty, _ in breakdown:
+            assert qty > 0
+
+    def test_empty_journal_returns_empty(self, tmp_path: Path):
+        """An empty journal produces no liabilities."""
+        journal = tmp_path / "empty.journal"
+        journal.write_text("")
+        breakdown = load_liabilities_breakdown(journal)
+        assert breakdown == []
+
+    def test_no_liabilities_returns_empty(self, sample_journal_path: Path):
+        """A journal without liabilities returns an empty list."""
+        breakdown = load_liabilities_breakdown(sample_journal_path)
+        assert breakdown == []
