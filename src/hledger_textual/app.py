@@ -63,6 +63,7 @@ class HledgerTuiApp(App):
         Binding("6", "switch_section('accounts')", "Accounts", show=False),
         Binding("7", "switch_section('info')", "Info", show=False),
         Binding("s", "git_sync", "Sync", show=False),
+        Binding("t", "pick_theme", "Theme", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -124,7 +125,7 @@ class HledgerTuiApp(App):
         if latest and is_newer(latest, current):
             self.app.call_from_thread(
                 self.notify,
-                f"hledger-textual v{latest} is available (current: v{current})",
+                f"hledger-textual {latest} is available (current: {current})",
                 severity="information",
                 timeout=8,
             )
@@ -186,6 +187,12 @@ class HledgerTuiApp(App):
     def action_switch_section(self, section: str) -> None:
         """Switch to the given section via keyboard shortcut (1-6)."""
         self._activate_section(section)
+
+    def action_pick_theme(self) -> None:
+        """Open the theme picker when on the Info tab."""
+        switcher = self.query_one("#content-switcher", ContentSwitcher)
+        if switcher.current == "info":
+            self.query_one(InfoPane).action_pick_theme()
 
     def action_git_sync(self) -> None:
         """Show confirmation dialog, then commit + pull + push via git."""

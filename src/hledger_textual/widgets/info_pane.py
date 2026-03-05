@@ -7,7 +7,6 @@ from pathlib import Path
 
 from textual import work
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Static
@@ -39,10 +38,6 @@ class InfoPane(Widget):
     """Widget showing journal metadata and project information."""
 
     CAN_FOCUS = True
-
-    BINDINGS = [
-        Binding("t", "pick_theme", "Theme", show=True, priority=True),
-    ]
 
     def __init__(self, journal_file: Path, **kwargs) -> None:
         """Initialize the info pane.
@@ -271,9 +266,9 @@ class InfoPane(Widget):
         if latest is None:
             widget.update("Unavailable")
         elif is_newer(latest, current):
-            widget.update(f"[bold yellow]v{latest} available[/bold yellow]")
+            widget.update(f"[bold yellow]{latest} available[/bold yellow]")
         else:
-            widget.update(f"v{latest} (up to date)")
+            widget.update(f"{latest} (up to date)")
 
     def refresh_git_status(self) -> None:
         """Reload git info (called after a sync operation)."""
