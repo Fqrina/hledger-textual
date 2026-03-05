@@ -15,6 +15,7 @@ from hledger_textual.config import _CONFIG_PATH
 from hledger_textual.git import git_branch, git_status_summary, is_git_repo
 from hledger_textual.hledger import HledgerError, get_hledger_version, load_journal_stats
 from hledger_textual.prices import get_pricehist_version, has_pricehist
+from hledger_textual.updates import get_latest_version, is_newer
 
 
 def _fmt_size(n: int) -> str:
@@ -100,6 +101,9 @@ class InfoPane(Widget):
                     with Horizontal(classes="info-row"):
                         yield Static("Repository", classes="info-label")
                         yield Static("", id="info-repo")
+                    with Horizontal(classes="info-row"):
+                        yield Static("Latest", classes="info-label")
+                        yield Static("Checking…", id="info-latest-version")
 
                 with Vertical(classes="info-section"):
                     yield Static("hledger", classes="info-section-title")
@@ -130,6 +134,7 @@ class InfoPane(Widget):
         self._load_journal_data()
         self._load_hledger_info()
         self._load_git_info()
+        self._load_update_check()
 
     def _apply_project_metadata(self) -> None:
         """Read project metadata from package info and display it."""
@@ -244,6 +249,28 @@ class InfoPane(Widget):
         self.query_one("#info-git-section").styles.display = "block"
         self.query_one("#info-git-branch", Static).update(branch)
         self.query_one("#info-git-status", Static).update(status)
+
+    @work(thread=True, exclusive=True, group="info-update-check")
+    def _load_update_check(self) -> None:
+        """Check PyPI for the latest version in a background thread."""
+        try:
+            meta = importlib.metadata.metadata("hledger-textual")
+            current = meta.get("Version", "0")
+        except importlib.metadata.PackageNotFoundError:
+            current = "0"
+
+        latest = get_latest_version()
+        self.app.call_from_thread(self._apply_update_check, current, latest)
+
+    def _apply_update_check(self, current: str, latest: str | None) -> None:
+        """Update the Latest version field in the About section."""
+        widget = self.query_one("#info-latest-version", Static)
+        if latest is None:
+            widget.update("Unavailable")
+        elif is_newer(latest, current):
+            widget.update(f"[bold yellow]v{latest} available[/bold yellow]")
+        else:
+            widget.update(f"v{latest} (up to date)")
 
     def refresh_git_status(self) -> None:
         """Reload git info (called after a sync operation)."""
