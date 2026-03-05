@@ -16,7 +16,7 @@ from textual.widgets import DataTable, Input, Static
 from hledger_textual.dateutil import next_month as _next_month
 from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
-from hledger_textual.models import Transaction
+from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
@@ -278,6 +278,44 @@ class TransactionsTable(Widget):
         try:
             replace_transaction(self.journal_file, original, updated)
             self.app.call_from_thread(self.notify, "Transaction updated", timeout=3)
+            self.app.call_from_thread(self.post_message, self.JournalChanged())
+        except JournalError as exc:
+            self.app.call_from_thread(
+                self.notify, str(exc), severity="error", timeout=8
+            )
+
+    def do_toggle_status(self, target: TransactionStatus) -> None:
+        """Toggle the status of the selected transaction.
+
+        If the current status matches *target*, revert to UNMARKED;
+        otherwise set it to *target*.
+        """
+        import dataclasses
+
+        txn = self.get_selected_transaction()
+        if txn is None:
+            self.notify("No transaction selected", severity="warning", timeout=3)
+            return
+
+        new_status = (
+            TransactionStatus.UNMARKED if txn.status == target else target
+        )
+        updated = dataclasses.replace(txn, status=new_status)
+        self._do_toggle_status(txn, updated)
+
+    @work(thread=True)
+    def _do_toggle_status(
+        self, original: Transaction, updated: Transaction
+    ) -> None:
+        """Persist a status change and emit JournalChanged."""
+        from hledger_textual.journal import JournalError, replace_transaction
+
+        try:
+            replace_transaction(self.journal_file, original, updated)
+            label = updated.status.value.lower()
+            self.app.call_from_thread(
+                self.notify, f"Status set to {label}", timeout=3
+            )
             self.app.call_from_thread(self.post_message, self.JournalChanged())
         except JournalError as exc:
             self.app.call_from_thread(

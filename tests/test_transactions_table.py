@@ -341,6 +341,98 @@ class TestTransactionsTableEditFlow:
             assert app.query_one("#transactions-table") is not None
 
 
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestTransactionsTableStatusToggle:
+    """Tests for do_toggle_status (status toggle via * and ! keys)."""
+
+    async def test_toggle_cleared_on_unmarked(self, table_journal: Path):
+        """Pressing * on an unmarked transaction sets it to cleared."""
+        from hledger_textual.hledger import load_transactions
+        from hledger_textual.models import TransactionStatus
+
+        app = HledgerTuiApp(journal_file=table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            await pilot.press("2")  # Switch to Transactions tab
+            await pilot.pause(delay=1.0)
+            # Row 0 is Salary (newest first, reverse order), which is unmarked
+            await pilot.press("*")
+            await pilot.pause(delay=1.5)
+            txns = load_transactions(table_journal)
+            salary = [t for t in txns if t.description == "Salary"][0]
+            assert salary.status == TransactionStatus.CLEARED
+
+    async def test_toggle_cleared_off(self, table_journal: Path):
+        """Pressing * on a cleared transaction reverts to unmarked."""
+        from hledger_textual.hledger import load_transactions
+        from hledger_textual.models import TransactionStatus
+
+        app = HledgerTuiApp(journal_file=table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            await pilot.press("2")
+            await pilot.pause(delay=1.0)
+            # Move to row 1: Grocery shopping (cleared)
+            await pilot.press("down")
+            await pilot.pause()
+            await pilot.press("*")
+            await pilot.pause(delay=1.5)
+            txns = load_transactions(table_journal)
+            grocery = [t for t in txns if "Grocery" in t.description][0]
+            assert grocery.status == TransactionStatus.UNMARKED
+
+    async def test_toggle_pending_on_unmarked(self, table_journal: Path):
+        """Pressing ! on an unmarked transaction sets it to pending."""
+        from hledger_textual.hledger import load_transactions
+        from hledger_textual.models import TransactionStatus
+
+        app = HledgerTuiApp(journal_file=table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            await pilot.press("2")
+            await pilot.pause(delay=1.0)
+            # Row 0 is Salary (unmarked)
+            await pilot.press("exclamation_mark")
+            await pilot.pause(delay=1.5)
+            txns = load_transactions(table_journal)
+            salary = [t for t in txns if t.description == "Salary"][0]
+            assert salary.status == TransactionStatus.PENDING
+
+    async def test_cross_toggle_pending_to_cleared(self, table_journal: Path):
+        """Pressing * on a pending transaction sets it to cleared."""
+        from hledger_textual.hledger import load_transactions
+        from hledger_textual.models import TransactionStatus
+
+        app = HledgerTuiApp(journal_file=table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            await pilot.press("2")
+            await pilot.pause(delay=1.0)
+            # Row 0 is Salary (unmarked) — set to pending first
+            await pilot.press("exclamation_mark")
+            await pilot.pause(delay=1.5)
+            # Then toggle to cleared
+            await pilot.press("*")
+            await pilot.pause(delay=1.5)
+            txns = load_transactions(table_journal)
+            salary = [t for t in txns if t.description == "Salary"][0]
+            assert salary.status == TransactionStatus.CLEARED
+
+    async def test_toggle_status_empty_table(self, empty_table_journal: Path):
+        """do_toggle_status is a no-op when no transaction is selected."""
+        from hledger_textual.models import TransactionStatus
+
+        app = _TableApp(empty_table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            txn_table = app.query_one(TransactionsTable)
+            txn_table.do_toggle_status(TransactionStatus.CLEARED)
+            await pilot.pause()
+            # Should not crash; table stays empty
+            table = app.query_one("#transactions-table")
+            assert table.row_count == 0
+
+
 class TestTransactionsTableLoadErrors:
     """Tests for HledgerError handling in background load workers."""
 

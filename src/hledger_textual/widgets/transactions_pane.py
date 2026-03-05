@@ -11,7 +11,7 @@ from textual.binding import Binding
 from textual.widget import Widget
 
 from hledger_textual.hledger import HledgerError, load_period_summary
-from hledger_textual.models import Transaction
+from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
@@ -36,6 +36,14 @@ class TransactionsPane(Widget):
         Binding("left", "prev_month", "Previous month", show=False, priority=True),
         Binding("right", "next_month", "Next month", show=False, priority=True),
         Binding("t", "today_month", "Today", show=False, priority=True),
+        Binding("*", "toggle_cleared", "Toggle cleared", show=False, priority=True),
+        Binding(
+            "exclamation_mark",
+            "toggle_pending",
+            "Toggle pending",
+            show=False,
+            priority=True,
+        ),
     ]
 
     def __init__(self, journal_file: Path, **kwargs) -> None:
@@ -128,6 +136,14 @@ class TransactionsPane(Widget):
     def action_delete(self) -> None:
         """Delete the selected transaction (with confirmation)."""
         self._table.do_delete()
+
+    def action_toggle_cleared(self) -> None:
+        """Toggle the cleared status of the selected transaction."""
+        self._table.do_toggle_status(TransactionStatus.CLEARED)
+
+    def action_toggle_pending(self) -> None:
+        """Toggle the pending status of the selected transaction."""
+        self._table.do_toggle_status(TransactionStatus.PENDING)
 
     # ------------------------------------------------------------------
     # Summary loading
