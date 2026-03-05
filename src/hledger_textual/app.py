@@ -21,7 +21,7 @@ from hledger_textual.widgets.transactions_table import TransactionsTable
 
 _FOOTER_COMMANDS: dict[str, str] = {
     "summary": "\\[r] Reload  \\[s] Sync  \\[q] Quit",
-    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[t] Today  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
+    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[*] Cleared  \\[!] Pending  \\[◄/►] Month  \\[t] Today  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
     "accounts": "\\[↵] Drill  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
     "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[t] Today  \\[/] Search  \\[s] Sync  \\[q] Quit",
     "reports": "\\[c] Chart  \\[i] Inv  \\[r] Reload  \\[s] Sync  \\[q] Quit",
