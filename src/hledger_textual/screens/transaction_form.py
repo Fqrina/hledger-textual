@@ -256,16 +256,19 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
         self,
         journal_file: Path,
         transaction: Transaction | None = None,
+        clone: bool = False,
     ) -> None:
         """Initialize the form modal.
 
         Args:
             journal_file: Path to the journal file.
             transaction: Existing transaction to edit, or None for new.
+            clone: If True, pre-fill from *transaction* but treat as new.
         """
         super().__init__()
         self.journal_file = journal_file
         self.transaction = transaction
+        self._clone = clone
         self.posting_count = 0
         self.accounts: list[str] = []
         self.commodity_data: dict[str, tuple[Decimal, Decimal, str]] = {}
@@ -273,11 +276,16 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
     @property
     def is_edit(self) -> bool:
         """Whether this form is editing an existing transaction."""
-        return self.transaction is not None
+        return self.transaction is not None and not self._clone
 
     def compose(self) -> ComposeResult:
         """Create the modal form layout."""
-        title = "Edit Transaction" if self.is_edit else "New Transaction"
+        if self._clone:
+            title = "Clone Transaction"
+        elif self.is_edit:
+            title = "Edit Transaction"
+        else:
+            title = "New Transaction"
 
         with Vertical(id="form-dialog"):
             yield Static(title, id="form-title")

@@ -136,9 +136,9 @@ class TransactionsTable(Widget):
                 )
         yield DataTable(id="transactions-table")
 
-    # Date, Status, Amount fixed; Description and Accounts flex
-    _TXN_FIXED = {0: 12, 1: 8, 4: 22}
-    _TXN_FLEX = {2: 2, 3: 3}  # Accounts gets more space than Description
+    # Date, Type, Status, Amount fixed; Description and Accounts flex
+    _TXN_FIXED = {0: 12, 1: 6, 2: 8, 5: 22}
+    _TXN_FLEX = {3: 2, 4: 3}  # Accounts gets more space than Description
 
     def on_mount(self) -> None:
         """Set up the DataTable columns and start loading."""
@@ -146,10 +146,11 @@ class TransactionsTable(Widget):
         table.cursor_type = "row"
         table.show_row_labels = False
         table.add_column("Date", width=self._TXN_FIXED[0])
-        table.add_column("Status", width=self._TXN_FIXED[1])
+        table.add_column("Type", width=self._TXN_FIXED[1])
+        table.add_column("Status", width=self._TXN_FIXED[2])
         table.add_column("Description", width=20)
         table.add_column("Accounts", width=20)
-        table.add_column("Amount", width=self._TXN_FIXED[4])
+        table.add_column("Amount", width=self._TXN_FIXED[5])
         self._load_transactions()
         table.focus()
 
@@ -303,6 +304,48 @@ class TransactionsTable(Widget):
         updated = dataclasses.replace(txn, status=new_status)
         self._do_toggle_status(txn, updated)
 
+    def do_move_month(self, direction: int) -> None:
+        """Move the selected transaction by *direction* months (+1 or -1).
+
+        Shifts the transaction date while preserving the day (clamped to
+        month end), then persists the change via replace_transaction.
+        """
+        import dataclasses
+        from datetime import date as date_cls
+
+        from hledger_textual.dateutil import shift_date_months
+
+        txn = self.get_selected_transaction()
+        if txn is None:
+            self.notify("No transaction selected", severity="warning", timeout=3)
+            return
+
+        try:
+            d = date_cls.fromisoformat(txn.date)
+        except ValueError:
+            self.notify("Cannot parse transaction date", severity="error", timeout=3)
+            return
+
+        new_date = shift_date_months(d, direction)
+        updated = dataclasses.replace(txn, date=new_date.isoformat())
+        self._do_move(txn, updated)
+
+    @work(thread=True)
+    def _do_move(self, original: Transaction, updated: Transaction) -> None:
+        """Persist a date move and emit JournalChanged."""
+        from hledger_textual.journal import JournalError, replace_transaction
+
+        try:
+            replace_transaction(self.journal_file, original, updated)
+            self.app.call_from_thread(
+                self.notify, f"Moved to {updated.date}", timeout=3
+            )
+            self.app.call_from_thread(self.post_message, self.JournalChanged())
+        except JournalError as exc:
+            self.app.call_from_thread(
+                self.notify, str(exc), severity="error", timeout=8
+            )
+
     @work(thread=True)
     def _do_toggle_status(
         self, original: Transaction, updated: Transaction
@@ -371,6 +414,7 @@ class TransactionsTable(Widget):
             accounts = " \u00b7 ".join(p.account for p in txn.postings)
             table.add_row(
                 txn.date,
+                txn.type_indicator,
                 txn.status.symbol,
                 txn.description,
                 Text(accounts),

@@ -59,7 +59,7 @@ class AccountTransactionsScreen(Screen):
         yield TransactionsTable(self.journal_file, fixed_query=fixed_query)
 
         yield Static(
-            "\\[Esc] Back  \\[/] Search  \\[e] Edit  \\[d] Delete  \\[r] Refresh",
+            "\\[Esc] Back  \\[/] Search  \\[e] Edit  \\[d] Delete  \\[r] Refresh  \\[?] Help",
             id="acctxn-footer",
         )
 

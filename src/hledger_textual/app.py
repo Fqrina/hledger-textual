@@ -19,14 +19,16 @@ from hledger_textual.widgets.summary_pane import SummaryPane
 from hledger_textual.widgets.transactions_pane import TransactionsPane
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
+_FOOTER_GLOBAL = "\\[s] Sync  \\[?] Help  \\[q] Quit"
+
 _FOOTER_COMMANDS: dict[str, str] = {
-    "summary": "\\[r] Reload  \\[s] Sync  \\[q] Quit",
-    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[*] Cleared  \\[!] Pending  \\[◄/►] Month  \\[t] Today  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
-    "accounts": "\\[↵] Drill  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
-    "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[t] Today  \\[/] Search  \\[s] Sync  \\[q] Quit",
-    "reports": "\\[c] Chart  \\[i] Inv  \\[r] Reload  \\[s] Sync  \\[q] Quit",
-    "info": "\\[t] Theme  \\[s] Sync  \\[q] Quit",
-    "recurring": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[g] Generate  \\[r] Reload  \\[s] Sync  \\[q] Quit",
+    "summary": f"\\[r] Reload  {_FOOTER_GLOBAL}",
+    "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[</>] Move  \\[◄/►] Month  \\[/] Search  {_FOOTER_GLOBAL}",
+    "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {_FOOTER_GLOBAL}",
+    "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  {_FOOTER_GLOBAL}",
+    "reports": f"\\[c] Chart  \\[i] Inv  \\[r] Reload  {_FOOTER_GLOBAL}",
+    "info": f"\\[t] Theme  {_FOOTER_GLOBAL}",
+    "recurring": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[g] Generate  \\[r] Reload  {_FOOTER_GLOBAL}",
 }
 
 
@@ -64,6 +66,7 @@ class HledgerTuiApp(App):
         Binding("7", "switch_section('info')", "Info", show=False),
         Binding("s", "git_sync", "Sync", show=False),
         Binding("t", "pick_theme", "Theme", show=False),
+        Binding("question_mark", "show_help", "Help", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -193,6 +196,12 @@ class HledgerTuiApp(App):
         switcher = self.query_one("#content-switcher", ContentSwitcher)
         if switcher.current == "info":
             self.query_one(InfoPane).action_pick_theme()
+
+    def action_show_help(self) -> None:
+        """Open the keyboard shortcuts help panel."""
+        from hledger_textual.screens.help import HelpScreen
+
+        self.push_screen(HelpScreen())
 
     def action_git_sync(self) -> None:
         """Show confirmation dialog, then commit + pull + push via git."""

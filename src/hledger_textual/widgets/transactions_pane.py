@@ -30,6 +30,21 @@ class TransactionsPane(Widget):
         Binding("e", "edit", "Edit", show=True, priority=True),
         Binding("enter", "edit", "Edit", show=False),
         Binding("d", "delete", "Delete", show=True, priority=True),
+        Binding("c", "clone", "Clone", show=True, priority=True),
+        Binding(
+            "less_than_sign",
+            "move_prev_month",
+            "Move to prev month",
+            show=False,
+            priority=True,
+        ),
+        Binding(
+            "greater_than_sign",
+            "move_next_month",
+            "Move to next month",
+            show=False,
+            priority=True,
+        ),
         Binding("slash", "filter", "Search", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
@@ -144,6 +159,49 @@ class TransactionsPane(Widget):
     def action_toggle_pending(self) -> None:
         """Toggle the pending status of the selected transaction."""
         self._table.do_toggle_status(TransactionStatus.PENDING)
+
+    def action_clone(self) -> None:
+        """Clone the selected transaction into the next month."""
+        import dataclasses
+        from datetime import date as date_cls
+
+        from hledger_textual.dateutil import shift_date_months
+        from hledger_textual.screens.transaction_form import TransactionFormScreen
+
+        txn = self._table.get_selected_transaction()
+        if txn is None:
+            self.notify("No transaction selected", severity="warning", timeout=3)
+            return
+
+        try:
+            d = date_cls.fromisoformat(txn.date)
+        except ValueError:
+            self.notify("Cannot parse transaction date", severity="error", timeout=3)
+            return
+
+        new_date = shift_date_months(d, 1)
+        clone = dataclasses.replace(txn, date=new_date.isoformat(), index=0)
+
+        def on_save(result: Transaction | None) -> None:
+            if result is not None:
+                self._do_append(result)
+
+        self.app.push_screen(
+            TransactionFormScreen(
+                journal_file=self.journal_file,
+                transaction=clone,
+                clone=True,
+            ),
+            callback=on_save,
+        )
+
+    def action_move_prev_month(self) -> None:
+        """Move the selected transaction to the previous month."""
+        self._table.do_move_month(-1)
+
+    def action_move_next_month(self) -> None:
+        """Move the selected transaction to the next month."""
+        self._table.do_move_month(1)
 
     # ------------------------------------------------------------------
     # Summary loading
