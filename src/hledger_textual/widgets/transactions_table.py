@@ -304,30 +304,16 @@ class TransactionsTable(Widget):
         updated = dataclasses.replace(txn, status=new_status)
         self._do_toggle_status(txn, updated)
 
-    def do_move_month(self, direction: int) -> None:
-        """Move the selected transaction by *direction* months (+1 or -1).
+    def do_move_to_date(self, txn: Transaction, new_date: str) -> None:
+        """Move a transaction to a new date.
 
-        Shifts the transaction date while preserving the day (clamped to
-        month end), then persists the change via replace_transaction.
+        Args:
+            txn: The transaction to move.
+            new_date: The target date string (ISO format).
         """
         import dataclasses
-        from datetime import date as date_cls
 
-        from hledger_textual.dateutil import shift_date_months
-
-        txn = self.get_selected_transaction()
-        if txn is None:
-            self.notify("No transaction selected", severity="warning", timeout=3)
-            return
-
-        try:
-            d = date_cls.fromisoformat(txn.date)
-        except ValueError:
-            self.notify("Cannot parse transaction date", severity="error", timeout=3)
-            return
-
-        new_date = shift_date_months(d, direction)
-        updated = dataclasses.replace(txn, date=new_date.isoformat())
+        updated = dataclasses.replace(txn, date=new_date)
         self._do_move(txn, updated)
 
     @work(thread=True)

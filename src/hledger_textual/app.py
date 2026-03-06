@@ -23,7 +23,7 @@ _FOOTER_GLOBAL = "\\[s] Sync  \\[?] Help  \\[q] Quit"
 
 _FOOTER_COMMANDS: dict[str, str] = {
     "summary": f"\\[r] Reload  {_FOOTER_GLOBAL}",
-    "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[</>] Move  \\[◄/►] Month  \\[/] Search  {_FOOTER_GLOBAL}",
+    "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[/] Search  {_FOOTER_GLOBAL}",
     "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {_FOOTER_GLOBAL}",
     "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  {_FOOTER_GLOBAL}",
     "reports": f"\\[c] Chart  \\[i] Inv  \\[r] Reload  {_FOOTER_GLOBAL}",

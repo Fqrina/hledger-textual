@@ -274,9 +274,14 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
         self.commodity_data: dict[str, tuple[Decimal, Decimal, str]] = {}
 
     @property
+    def _has_template(self) -> bool:
+        """Whether a transaction template is available for pre-filling."""
+        return self.transaction is not None
+
+    @property
     def is_edit(self) -> bool:
         """Whether this form is editing an existing transaction."""
-        return self.transaction is not None and not self._clone
+        return self._has_template and not self._clone
 
     def compose(self) -> ComposeResult:
         """Create the modal form layout."""
@@ -295,7 +300,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 with Horizontal(classes="form-field"):
                     yield Label("Date:")
                     yield DateInput(
-                        value=self.transaction.date if self.is_edit else date.today().isoformat(),
+                        value=self.transaction.date if self._has_template else date.today().isoformat(),
                         id="input-date",
                     )
 
@@ -303,7 +308,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 with Horizontal(classes="form-field"):
                     yield Label("Description:")
                     yield AutocompleteInput(
-                        value=self.transaction.description if self.is_edit else "",
+                        value=self.transaction.description if self._has_template else "",
                         placeholder="Transaction description",
                         id="input-description",
                     )
@@ -312,7 +317,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 with Horizontal(classes="form-field"):
                     yield Label("Status:")
                     initial_status = (
-                        self.transaction.status if self.is_edit else TransactionStatus.UNMARKED
+                        self.transaction.status if self._has_template else TransactionStatus.UNMARKED
                     )
                     yield Select(
                         options=STATUS_OPTIONS,
@@ -324,7 +329,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 with Horizontal(classes="form-field"):
                     yield Label("Code:")
                     yield Input(
-                        value=self.transaction.code if self.is_edit else "",
+                        value=self.transaction.code if self._has_template else "",
                         placeholder="Optional transaction code",
                         id="input-code",
                     )
@@ -333,7 +338,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 with Horizontal(classes="form-field"):
                     yield Label("Comment:")
                     yield Input(
-                        value=self.transaction.comment if self.is_edit else "",
+                        value=self.transaction.comment if self._has_template else "",
                         placeholder="Optional comment",
                         id="input-comment",
                     )
@@ -379,7 +384,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
 
         self._load_commodity_data()
 
-        if self.is_edit and self.transaction:
+        if self._has_template:
             for i, posting in enumerate(self.transaction.postings):
                 amount_str = ""
                 commodity = load_default_commodity()

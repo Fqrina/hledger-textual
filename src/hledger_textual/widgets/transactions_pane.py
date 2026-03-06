@@ -31,20 +31,7 @@ class TransactionsPane(Widget):
         Binding("enter", "edit", "Edit", show=False),
         Binding("d", "delete", "Delete", show=True, priority=True),
         Binding("c", "clone", "Clone", show=True, priority=True),
-        Binding(
-            "less_than_sign",
-            "move_prev_month",
-            "Move to prev month",
-            show=False,
-            priority=True,
-        ),
-        Binding(
-            "greater_than_sign",
-            "move_next_month",
-            "Move to next month",
-            show=False,
-            priority=True,
-        ),
+        Binding("m", "move", "Move", show=True, priority=True),
         Binding("slash", "filter", "Search", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
@@ -161,11 +148,9 @@ class TransactionsPane(Widget):
         self._table.do_toggle_status(TransactionStatus.PENDING)
 
     def action_clone(self) -> None:
-        """Clone the selected transaction into the next month."""
+        """Clone the selected transaction with an empty date for the user to fill."""
         import dataclasses
-        from datetime import date as date_cls
 
-        from hledger_textual.dateutil import shift_date_months
         from hledger_textual.screens.transaction_form import TransactionFormScreen
 
         txn = self._table.get_selected_transaction()
@@ -173,14 +158,7 @@ class TransactionsPane(Widget):
             self.notify("No transaction selected", severity="warning", timeout=3)
             return
 
-        try:
-            d = date_cls.fromisoformat(txn.date)
-        except ValueError:
-            self.notify("Cannot parse transaction date", severity="error", timeout=3)
-            return
-
-        new_date = shift_date_months(d, 1)
-        clone = dataclasses.replace(txn, date=new_date.isoformat(), index=0)
+        clone = dataclasses.replace(txn, date="", index=0)
 
         def on_save(result: Transaction | None) -> None:
             if result is not None:
@@ -195,13 +173,20 @@ class TransactionsPane(Widget):
             callback=on_save,
         )
 
-    def action_move_prev_month(self) -> None:
-        """Move the selected transaction to the previous month."""
-        self._table.do_move_month(-1)
+    def action_move(self) -> None:
+        """Show the move dialog to change the transaction date."""
+        from hledger_textual.screens.move_confirm import MoveConfirmModal
 
-    def action_move_next_month(self) -> None:
-        """Move the selected transaction to the next month."""
-        self._table.do_move_month(1)
+        txn = self._table.get_selected_transaction()
+        if txn is None:
+            self.notify("No transaction selected", severity="warning", timeout=3)
+            return
+
+        def on_confirm(new_date: str | None) -> None:
+            if new_date is not None:
+                self._table.do_move_to_date(txn, new_date)
+
+        self.app.push_screen(MoveConfirmModal(txn), callback=on_confirm)
 
     # ------------------------------------------------------------------
     # Summary loading
