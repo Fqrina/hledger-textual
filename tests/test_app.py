@@ -343,8 +343,8 @@ class TestTabNavigation:
             assert "Add" in rendered
             assert "Search" in rendered
 
-    async def test_sync_in_all_footers(self, app: HledgerTuiApp):
-        """[s] Sync appears in the footer of every tab."""
+    async def test_help_in_all_footers(self, app: HledgerTuiApp):
+        """[?] Help appears in the footer of every tab."""
         from textual.widgets import Static
 
         async with app.run_test() as pilot:
@@ -353,4 +353,4 @@ class TestTabNavigation:
                 await pilot.pause()
                 footer = app.screen.query_one("#footer-bar", Static)
                 rendered = str(footer.renderable)
-                assert "Sync" in rendered, f"Sync missing in tab {key}"
+                assert "Help" in rendered, f"Help missing in tab {key}"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 from datetime import date
 
 
@@ -33,3 +34,20 @@ def next_month(d: date) -> date:
     if month > 12:
         month, year = 1, year + 1
     return d.replace(year=year, month=month, day=1)
+
+
+def shift_date_months(d: date, months: int) -> date:
+    """Shift a date by *months* months, clamping the day to the target month's last day.
+
+    Args:
+        d: The date to shift.
+        months: Number of months to shift (positive = forward, negative = backward).
+
+    Returns:
+        A new date with the month shifted and the day clamped.
+    """
+    total_months = d.year * 12 + (d.month - 1) + months
+    year = total_months // 12
+    month = total_months % 12 + 1
+    max_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(d.day, max_day))

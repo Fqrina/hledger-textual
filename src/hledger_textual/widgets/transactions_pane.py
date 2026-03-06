@@ -30,6 +30,8 @@ class TransactionsPane(Widget):
         Binding("e", "edit", "Edit", show=True, priority=True),
         Binding("enter", "edit", "Edit", show=False),
         Binding("d", "delete", "Delete", show=True, priority=True),
+        Binding("c", "clone", "Clone", show=True, priority=True),
+        Binding("m", "move", "Move", show=True, priority=True),
         Binding("slash", "filter", "Search", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
@@ -144,6 +146,47 @@ class TransactionsPane(Widget):
     def action_toggle_pending(self) -> None:
         """Toggle the pending status of the selected transaction."""
         self._table.do_toggle_status(TransactionStatus.PENDING)
+
+    def action_clone(self) -> None:
+        """Clone the selected transaction with an empty date for the user to fill."""
+        import dataclasses
+
+        from hledger_textual.screens.transaction_form import TransactionFormScreen
+
+        txn = self._table.get_selected_transaction()
+        if txn is None:
+            self.notify("No transaction selected", severity="warning", timeout=3)
+            return
+
+        clone = dataclasses.replace(txn, date="", index=0)
+
+        def on_save(result: Transaction | None) -> None:
+            if result is not None:
+                self._do_append(result)
+
+        self.app.push_screen(
+            TransactionFormScreen(
+                journal_file=self.journal_file,
+                transaction=clone,
+                clone=True,
+            ),
+            callback=on_save,
+        )
+
+    def action_move(self) -> None:
+        """Show the move dialog to change the transaction date."""
+        from hledger_textual.screens.move_confirm import MoveConfirmModal
+
+        txn = self._table.get_selected_transaction()
+        if txn is None:
+            self.notify("No transaction selected", severity="warning", timeout=3)
+            return
+
+        def on_confirm(new_date: str | None) -> None:
+            if new_date is not None:
+                self._table.do_move_to_date(txn, new_date)
+
+        self.app.push_screen(MoveConfirmModal(txn), callback=on_confirm)
 
     # ------------------------------------------------------------------
     # Summary loading

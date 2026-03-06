@@ -111,6 +111,23 @@ class Transaction:
     tags: list[str] = field(default_factory=list)
 
     @property
+    def type_indicator(self) -> str:
+        """Return 'I' for income, 'E' for expense, '-' for mixed/transfer."""
+        has_income = False
+        has_expense = False
+        for posting in self.postings:
+            top = posting.account.split(":")[0].lower()
+            if top in ("income", "revenues", "revenue"):
+                has_income = True
+            elif top in ("expenses", "expense"):
+                has_expense = True
+        if has_income and not has_expense:
+            return "I"
+        if has_expense and not has_income:
+            return "E"
+        return "-"
+
+    @property
     def total_amount(self) -> str:
         """Return the sum of positive amounts for display.
 

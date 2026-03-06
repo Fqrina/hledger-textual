@@ -3,24 +3,11 @@
 [![PyPI](https://img.shields.io/pypi/v/hledger-textual?label=PyPI&color=blue)](https://pypi.org/project/hledger-textual/)
 [![GitHub Release](https://img.shields.io/github/v/release/thesmokinator/hledger-textual?label=GitHub&color=blue)](https://github.com/thesmokinator/hledger-textual/releases)
 
-A terminal user interface for managing [hledger](https://hledger.org) journal transactions. View, create, edit, and delete transactions from your terminal.
+A full-featured terminal user interface for [hledger](https://hledger.org) plain-text accounting. Manage transactions, recurring rules, budgets, and investments — with multi-period reports, account drill-downs, and git sync — all from your terminal.
 
 Built with [Textual](https://textual.textualize.io) and Python.
 
-![hledger-textual summary](https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/001.png)
-
-<table>
-  <tr>
-    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/002.png" alt="Transactions" width="300"/></td>
-    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/003.png" alt="Transaction form" width="300"/></td>
-    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/004.png" alt="Recurring" width="300"/></td>
-  </tr>
-  <tr>
-    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/005.png" alt="Budget" width="300"/></td>
-    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/006.png" alt="Reports" width="300"/></td>
-    <td><img src="https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/008.png" alt="Accounts" width="300"/></td>
-  </tr>
-</table>
+![hledger-textual demo](https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/demo.gif)
 
 ## Stack
 
@@ -50,7 +37,7 @@ uv tool install hledger-textual
 ```bash
 hledger-textual -f path/to/your.journal
 ```
-rrr
+
 The journal file is resolved in this order:
 
 1. `-f` / `--file` CLI argument
