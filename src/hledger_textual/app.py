@@ -12,7 +12,6 @@ from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 from hledger_textual.config import load_auto_generate_recurring, load_theme
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
-from hledger_textual.widgets.info_pane import InfoPane
 from hledger_textual.widgets.recurring_pane import RecurringPane
 from hledger_textual.widgets.reports_pane import ReportsPane
 from hledger_textual.widgets.summary_pane import SummaryPane
@@ -27,7 +26,6 @@ _FOOTER_COMMANDS: dict[str, str] = {
     "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {_FOOTER_GLOBAL}",
     "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  {_FOOTER_GLOBAL}",
     "reports": f"\\[c] Chart  \\[i] Inv  \\[r] Reload  {_FOOTER_GLOBAL}",
-    "info": f"\\[t] Theme  {_FOOTER_GLOBAL}",
     "recurring": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[g] Generate  \\[r] Reload  {_FOOTER_GLOBAL}",
 }
 
@@ -63,9 +61,8 @@ class HledgerTuiApp(App):
         Binding("4", "switch_section('budget')", "Budget", show=False),
         Binding("5", "switch_section('reports')", "Reports", show=False),
         Binding("6", "switch_section('accounts')", "Accounts", show=False),
-        Binding("7", "switch_section('info')", "Info", show=False),
+        Binding("i", "show_about", "About", show=False),
         Binding("s", "git_sync", "Sync", show=False),
-        Binding("t", "pick_theme", "Theme", show=False),
         Binding("question_mark", "show_help", "Help", show=False),
         Binding("q", "quit", "Quit"),
     ]
@@ -91,7 +88,6 @@ class HledgerTuiApp(App):
             _NavTab("4. Budget", id="tab-budget"),
             _NavTab("5. Reports", id="tab-reports"),
             _NavTab("6. Accounts", id="tab-accounts"),
-            _NavTab("7. Info", id="tab-info"),
             id="nav-tabs",
         )
 
@@ -101,7 +97,6 @@ class HledgerTuiApp(App):
             yield BudgetPane(self.journal_file, id="budget")
             yield ReportsPane(self.journal_file, id="reports")
             yield AccountsPane(self.journal_file, id="accounts")
-            yield InfoPane(self.journal_file, id="info")
             yield RecurringPane(self.journal_file, id="recurring")
 
         yield Static(_FOOTER_COMMANDS["summary"], id="footer-bar")
@@ -209,8 +204,6 @@ class HledgerTuiApp(App):
             self.query_one("#budget-table", DataTable).focus()
         elif section == "reports":
             self.query_one("#reports-table", DataTable).focus()
-        elif section == "info":
-            self.query_one(InfoPane).focus()
         elif section == "recurring":
             self.query_one("#recurring-table", DataTable).focus()
 
@@ -240,11 +233,11 @@ class HledgerTuiApp(App):
         """Switch to the given section via keyboard shortcut (1-6)."""
         self._activate_section(section)
 
-    def action_pick_theme(self) -> None:
-        """Open the theme picker when on the Info tab."""
-        switcher = self.query_one("#content-switcher", ContentSwitcher)
-        if switcher.current == "info":
-            self.query_one(InfoPane).action_pick_theme()
+    def action_show_about(self) -> None:
+        """Open the about modal with journal and app information."""
+        from hledger_textual.screens.about import AboutModal
+
+        self.push_screen(AboutModal(self.journal_file))
 
     def action_show_help(self) -> None:
         """Open the keyboard shortcuts help panel."""
@@ -284,7 +277,3 @@ class HledgerTuiApp(App):
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error"
             )
-
-        self.app.call_from_thread(
-            self.query_one(InfoPane).refresh_git_status
-        )

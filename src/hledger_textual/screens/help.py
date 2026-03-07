@@ -19,7 +19,8 @@ def _build_help_text() -> str:
         (
             "Global",
             [
-                ("1-7", "Switch tab"),
+                ("1-6", "Switch tab"),
+                ("i", "About"),
                 ("s", "Git Sync"),
                 ("?", "This help"),
                 ("q", "Quit"),
@@ -76,12 +77,6 @@ def _build_help_text() -> str:
                 ("c", "Toggle chart"),
                 ("i", "Investment view"),
                 ("r", "Reload"),
-            ],
-        ),
-        (
-            "Info",
-            [
-                ("t", "Theme picker"),
             ],
         ),
     ]
