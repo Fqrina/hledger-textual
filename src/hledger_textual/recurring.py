@@ -576,7 +576,8 @@ def compute_pending(
     except ValueError:
         return []
 
-    end = today
+    _, last_day = calendar.monthrange(today.year, today.month)
+    end = today.replace(day=last_day)
     if rule.end_date:
         try:
             end = min(end, date.fromisoformat(rule.end_date))

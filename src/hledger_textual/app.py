@@ -9,7 +9,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
-from hledger_textual.config import load_theme
+from hledger_textual.config import load_auto_generate_recurring, load_theme
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
 from hledger_textual.widgets.info_pane import InfoPane
@@ -110,6 +110,8 @@ class HledgerTuiApp(App):
         """Focus the default section after mount."""
         self._focus_section("summary")
         self._check_for_updates()
+        if load_auto_generate_recurring():
+            self._auto_generate_recurring()
 
     @work(thread=True, exclusive=True, group="startup-update-check")
     def _check_for_updates(self) -> None:
@@ -132,6 +134,53 @@ class HledgerTuiApp(App):
                 severity="information",
                 timeout=8,
             )
+
+    @work(thread=True, exclusive=True, group="startup-auto-generate")
+    def _auto_generate_recurring(self) -> None:
+        """Auto-generate pending recurring transactions for the current month on startup."""
+        from datetime import date
+
+        from hledger_textual.recurring import (
+            RecurringError,
+            compute_pending,
+            ensure_recurring_file,
+            generate_transactions,
+            parse_recurring_rules,
+        )
+
+        try:
+            recurring_path = ensure_recurring_file(self.journal_file)
+            rules = parse_recurring_rules(recurring_path)
+        except Exception:
+            return
+
+        today = date.today()
+        pending: list[tuple] = []
+        for rule in rules:
+            try:
+                dates = compute_pending(rule, self.journal_file, today)
+            except Exception:
+                continue
+            if dates:
+                pending.append((rule, dates))
+
+        if not pending:
+            return
+
+        for rule, dates in pending:
+            try:
+                generate_transactions(rule, dates, self.journal_file)
+            except RecurringError:
+                return
+
+        total = sum(len(d) for _, d in pending)
+        self.app.call_from_thread(
+            self.notify,
+            f"Auto-generated {total} recurring transaction(s)",
+            severity="information",
+            timeout=5,
+        )
+        self.app.call_from_thread(self._refresh_all_panes)
 
     def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
         """Handle tab activation (click) — switch content and focus."""

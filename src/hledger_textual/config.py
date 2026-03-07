@@ -104,6 +104,23 @@ def load_price_tickers() -> dict[str, str]:
     return {str(k): str(v) for k, v in prices.items()}
 
 
+def load_auto_generate_recurring() -> bool:
+    """Return whether automatic generation of recurring transactions on startup is enabled.
+
+    Reads the ``auto_generate_recurring`` key from config.toml.
+    Defaults to ``False`` when the key is absent.
+
+    Returns:
+        ``True`` if auto-generation is enabled, ``False`` otherwise.
+    """
+    val = _load_config_dict().get("auto_generate_recurring", False)
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.lower() in ("true", "1", "yes")
+    return False
+
+
 def _load_config_toml() -> str | None:
     """Load journal_file from config.toml if it exists.
 
