@@ -18,6 +18,7 @@ from hledger_textual.hledger import HledgerError, load_investment_report, load_r
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.formatting import fmt_amount_str
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 from hledger_textual.widgets.report_chart import ReportChart, extract_chart_data
 
@@ -76,8 +77,10 @@ def _merge_investments(is_data: ReportData, inv_data: ReportData) -> ReportData:
     )
 
 
-class ReportsPane(Widget):
+class ReportsPane(DataTablePaneMixin, Widget):
     """Widget showing multi-period hledger financial reports."""
+
+    _main_table_id = "reports-table"
 
     BINDINGS = [
         Binding("r", "refresh", "Refresh", show=True, priority=True),
@@ -125,10 +128,6 @@ class ReportsPane(Widget):
         table = self.query_one("#reports-table", DataTable)
         table.cursor_type = "row"
         self._load_report_data()
-
-    def on_show(self) -> None:
-        """Restore focus to the table when the pane becomes visible."""
-        self.query_one("#reports-table", DataTable).focus()
 
     def on_resize(self) -> None:
         """Recalculate column widths when the pane is resized."""
@@ -282,14 +281,6 @@ class ReportsPane(Widget):
         """Reload report data."""
         self._load_report_data()
         self.notify("Refreshed", timeout=2)
-
-    def action_cursor_down(self) -> None:
-        """Move cursor down in the table."""
-        self.query_one("#reports-table", DataTable).action_cursor_down()
-
-    def action_cursor_up(self) -> None:
-        """Move cursor up in the table."""
-        self.query_one("#reports-table", DataTable).action_cursor_up()
 
     # --- Event handlers ---
 

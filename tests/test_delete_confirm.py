@@ -103,7 +103,7 @@ class TestDeleteConfirmModal:
         app = TestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
-            cancel_btn = app.screen.query_one("#btn-cancel")
+            cancel_btn = app.screen.query_one("#btn-delete-cancel")
             await pilot.click(cancel_btn)
             await pilot.pause()
             assert results == [False]

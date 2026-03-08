@@ -278,14 +278,18 @@ AccountTransactionsScreen {
     padding: 0 1;
 }
 
-/* --- Delete Confirmation Modal --- */
+/* --- Delete Confirmation Modals (shared) --- */
 
-DeleteConfirmModal {
+DeleteConfirmModal,
+BudgetDeleteConfirmModal,
+RecurringDeleteConfirmModal {
     align: center middle;
     background: $surface 60%;
 }
 
-#delete-dialog {
+#delete-dialog,
+#budget-delete-dialog,
+#recurring-delete-dialog {
     width: 60;
     height: auto;
     max-height: 20;
@@ -294,7 +298,9 @@ DeleteConfirmModal {
     padding: 1 2;
 }
 
-#delete-title {
+#delete-title,
+#budget-delete-title,
+#recurring-delete-title {
     text-style: bold;
     color: $error;
     width: 100%;
@@ -302,21 +308,29 @@ DeleteConfirmModal {
     margin-bottom: 1;
 }
 
-#delete-summary {
+#delete-summary,
+#budget-delete-summary,
+#recurring-delete-summary {
     margin-bottom: 1;
     height: auto;
 }
 
-#delete-buttons {
+#delete-buttons,
+#budget-delete-buttons,
+#recurring-delete-buttons {
     height: 3;
     align: center middle;
 }
 
-#delete-buttons Button {
+#delete-buttons Button,
+#budget-delete-buttons Button,
+#recurring-delete-buttons Button {
     margin: 0 1;
 }
 
-#btn-delete {
+#btn-delete,
+#btn-budget-delete,
+#btn-recurring-delete {
     background: $error;
 }
 
@@ -525,47 +539,6 @@ BudgetFormScreen {
     margin: 0 1;
 }
 
-/* --- Budget Delete Confirmation Modal --- */
-
-BudgetDeleteConfirmModal {
-    align: center middle;
-    background: $surface 60%;
-}
-
-#budget-delete-dialog {
-    width: 60;
-    height: auto;
-    max-height: 20;
-    border: thick $error;
-    background: $surface;
-    padding: 1 2;
-}
-
-#budget-delete-title {
-    text-style: bold;
-    color: $error;
-    width: 100%;
-    text-align: center;
-    margin-bottom: 1;
-}
-
-#budget-delete-summary {
-    margin-bottom: 1;
-    height: auto;
-}
-
-#budget-delete-buttons {
-    height: 3;
-    align: center middle;
-}
-
-#budget-delete-buttons Button {
-    margin: 0 1;
-}
-
-#btn-budget-delete {
-    background: $error;
-}
 
 /* --- Reports Pane --- */
 
@@ -683,47 +656,6 @@ RecurringPane {
     height: 1fr;
 }
 
-/* --- Recurring Delete Confirmation Modal --- */
-
-RecurringDeleteConfirmModal {
-    align: center middle;
-    background: $surface 60%;
-}
-
-#recurring-delete-dialog {
-    width: 60;
-    height: auto;
-    max-height: 20;
-    border: thick $error;
-    background: $surface;
-    padding: 1 2;
-}
-
-#recurring-delete-title {
-    text-style: bold;
-    color: $error;
-    width: 100%;
-    text-align: center;
-    margin-bottom: 1;
-}
-
-#recurring-delete-summary {
-    margin-bottom: 1;
-    height: auto;
-}
-
-#recurring-delete-buttons {
-    height: 3;
-    align: center middle;
-}
-
-#recurring-delete-buttons Button {
-    margin: 0 1;
-}
-
-#btn-recurring-delete {
-    background: $error;
-}
 
 /* --- Recurring Generate Screen --- */
 

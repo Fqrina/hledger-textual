@@ -13,12 +13,11 @@ from __future__ import annotations
 import calendar
 import re
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 
-from hledger_textual.fileutil import backup as _backup
-from hledger_textual.fileutil import cleanup_backup as _cleanup_backup
-from hledger_textual.fileutil import restore as _restore
+from hledger_textual.amountutil import parse_amount_string as _parse_amount_string_raw
+from hledger_textual.fileutil import safe_write_with_validation
 from hledger_textual.hledger import HledgerError, check_journal, load_transactions, run_hledger
 from hledger_textual.journal import JournalError, append_transaction
 from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, Transaction
@@ -79,42 +78,11 @@ def ensure_recurring_file(journal_file: Path) -> Path:
 
 
 def _parse_amount_string(s: str) -> tuple[Decimal, str]:
-    """Parse an amount string like '€800.00' or '150.00 EUR' into (quantity, commodity).
-
-    Args:
-        s: The amount string to parse.
-
-    Returns:
-        A tuple of (quantity, commodity).
-
-    Raises:
-        RecurringError: If the amount cannot be parsed.
-    """
-    s = s.strip()
-    if not s:
-        raise RecurringError("Empty amount string")
-
-    # Try left-side commodity: €800.00 or $500
-    match = re.match(r"^([^\d\s.-]+)\s*(-?[\d.]+)$", s)
-    if match:
-        commodity = match.group(1)
-        try:
-            quantity = Decimal(match.group(2))
-        except InvalidOperation:
-            raise RecurringError(f"Invalid amount: {s}")
-        return quantity, commodity
-
-    # Try right-side commodity: 800.00 EUR
-    match = re.match(r"^(-?[\d.]+)\s*([^\d\s.-]+)$", s)
-    if match:
-        try:
-            quantity = Decimal(match.group(1))
-        except InvalidOperation:
-            raise RecurringError(f"Invalid amount: {s}")
-        commodity = match.group(2)
-        return quantity, commodity
-
-    raise RecurringError(f"Cannot parse amount: {s}")
+    """Parse an amount string, wrapping ValueError as RecurringError."""
+    try:
+        return _parse_amount_string_raw(s)
+    except ValueError as exc:
+        raise RecurringError(str(exc)) from exc
 
 
 def _parse_posting_line(line: str) -> Posting | None:
@@ -301,28 +269,14 @@ def write_recurring_rules(
     Raises:
         RecurringError: If validation fails (file is restored from backup).
     """
-    backup = _backup(recurring_path)
-
-    try:
-        content = _format_recurring_file(rules)
-        recurring_path.write_text(content)
-
-        try:
-            check_journal(journal_file)
-        except HledgerError as exc:
-            _restore(recurring_path, backup)
-            _cleanup_backup(backup)
-            raise RecurringError(
-                f"Recurring validation failed, changes reverted: {exc}"
-            )
-
-        _cleanup_backup(backup)
-    except RecurringError:
-        raise
-    except Exception as exc:
-        _restore(recurring_path, backup)
-        _cleanup_backup(backup)
-        raise RecurringError(f"Failed to write recurring rules: {exc}")
+    safe_write_with_validation(
+        target_file=recurring_path,
+        content=_format_recurring_file(rules),
+        journal_file=journal_file,
+        validate=check_journal,
+        error_cls=RecurringError,
+        context="Recurring",
+    )
 
 
 def add_recurring_rule(
