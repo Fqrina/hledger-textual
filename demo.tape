@@ -36,17 +36,11 @@ Sleep 1.5s
 Type "t"
 Sleep 1.5s
 
-# --- 3. Open help panel ---
-Type "?"
-Sleep 2.5s
-Escape
-Sleep 1s
-
-# --- 4. Recurring tab ---
+# --- 3. Recurring tab ---
 Type "3"
 Sleep 2s
 
-# --- 5. Budget tab ---
+# --- 4. Budget tab ---
 Type "4"
 Sleep 2s
 
@@ -58,7 +52,7 @@ Sleep 1.5s
 Type "t"
 Sleep 1.5s
 
-# --- 6. Reports tab ---
+# --- 5. Reports tab ---
 Type "5"
 Sleep 2s
 
@@ -66,7 +60,7 @@ Sleep 2s
 Type "c"
 Sleep 2s
 
-# --- 7. Accounts tab ---
+# --- 6. Accounts tab ---
 Type "6"
 Sleep 2s
 
@@ -75,6 +69,12 @@ Down
 Down
 Enter
 Sleep 2s
+Escape
+Sleep 1s
+
+# --- 7. Help panel ---
+Type "?"
+Sleep 2.5s
 Escape
 Sleep 1s
 
