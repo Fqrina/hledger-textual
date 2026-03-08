@@ -13,12 +13,15 @@ from rich.text import Text
 from textual.widgets import DataTable, Input
 
 from hledger_textual.hledger import HledgerError, load_account_balances
-from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.formatting import fmt_amount_str
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 
 
-class AccountsPane(Widget):
+class AccountsPane(DataTablePaneMixin, Widget):
     """Widget showing all accounts with their current balances."""
+
+    _main_table_id = "accounts-table"
+    _fixed_column_widths = {1: 20}
 
     BINDINGS = [
         Binding("enter", "view_account", "View", show=True, priority=True),
@@ -50,25 +53,14 @@ class AccountsPane(Widget):
             )
         yield DataTable(id="accounts-table")
 
-    _ACCOUNTS_FIXED = {1: 20}
-
     def on_mount(self) -> None:
         """Set up the DataTable and load account balances."""
-        table = self.query_one("#accounts-table", DataTable)
+        table = self._get_main_table()
         table.cursor_type = "row"
         table.add_column("Account", width=20)
-        table.add_column("Balance", width=self._ACCOUNTS_FIXED[1])
+        table.add_column("Balance", width=self._fixed_column_widths[1])
         self._load_balances()
         table.focus()
-
-    def on_show(self) -> None:
-        """Restore focus to the table when the pane becomes visible."""
-        self.query_one("#accounts-table", DataTable).focus()
-
-    def on_resize(self) -> None:
-        """Recalculate column widths when the pane is resized."""
-        table = self.query_one("#accounts-table", DataTable)
-        distribute_column_widths(table, self._ACCOUNTS_FIXED)
 
     def _load_balances(self) -> None:
         """Load account balances from hledger and populate the table."""
@@ -151,14 +143,6 @@ class AccountsPane(Widget):
             self.filter_text = ""
             self._update_table()
             self.query_one("#accounts-table", DataTable).focus()
-
-    def action_cursor_down(self) -> None:
-        """Move cursor down in the table."""
-        self.query_one("#accounts-table", DataTable).action_cursor_down()
-
-    def action_cursor_up(self) -> None:
-        """Move cursor up in the table."""
-        self.query_one("#accounts-table", DataTable).action_cursor_up()
 
     # --- Event handlers ---
 

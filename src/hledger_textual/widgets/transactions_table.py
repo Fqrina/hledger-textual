@@ -220,7 +220,10 @@ class TransactionsTable(Widget):
         key_str = row_key.value if row_key else None
         if key_str is None:
             return None
-        index = int(key_str)
+        try:
+            index = int(key_str)
+        except ValueError:
+            return None
         for txn in self._all_transactions:
             if txn.index == index:
                 return txn
@@ -393,21 +396,75 @@ class TransactionsTable(Widget):
         self._update_table(txns)
 
     def _update_table(self, transactions: list[Transaction]) -> None:
-        """Repopulate the DataTable with *transactions*."""
+        """Repopulate the DataTable with *transactions*.
+
+        When viewing the current month (not in search mode), transactions with
+        a date after today are rendered dimmed and separated from the rest by a
+        visual divider row labelled "Scheduled".
+        """
         table = self.query_one(DataTable)
         table.clear()
-        for txn in transactions:
-            accounts = " \u00b7 ".join(p.account for p in txn.postings)
-            table.add_row(
-                txn.date,
-                txn.type_indicator,
-                txn.status.symbol,
-                txn.description,
-                Text(accounts),
-                txn.total_amount,
-                key=str(txn.index),
-            )
-        table = self.query_one(DataTable)
+
+        today = date.today()
+        today_iso = today.isoformat()
+        is_current_month = (
+            not self._fixed_query
+            and not self._search_query
+            and self._current_month.year == today.year
+            and self._current_month.month == today.month
+        )
+
+        if is_current_month:
+            future = [t for t in transactions if t.date > today_iso]
+            past = [t for t in transactions if t.date <= today_iso]
+
+            for txn in future:
+                accounts = " \u00b7 ".join(p.account for p in txn.postings)
+                table.add_row(
+                    Text(txn.date, style="dim"),
+                    Text(txn.type_indicator, style="dim"),
+                    Text(txn.status.symbol, style="dim"),
+                    Text(txn.description, style="dim"),
+                    Text(accounts, style="dim"),
+                    Text(txn.total_amount, style="dim"),
+                    key=str(txn.index),
+                )
+
+            if future and past:
+                table.add_row(
+                    Text(""),
+                    Text(""),
+                    Text(""),
+                    Text("── Scheduled ──", style="dim italic"),
+                    Text(""),
+                    Text(""),
+                    key="__separator__",
+                )
+
+            for txn in past:
+                accounts = " \u00b7 ".join(p.account for p in txn.postings)
+                table.add_row(
+                    txn.date,
+                    txn.type_indicator,
+                    txn.status.symbol,
+                    txn.description,
+                    Text(accounts),
+                    txn.total_amount,
+                    key=str(txn.index),
+                )
+        else:
+            for txn in transactions:
+                accounts = " \u00b7 ".join(p.account for p in txn.postings)
+                table.add_row(
+                    txn.date,
+                    txn.type_indicator,
+                    txn.status.symbol,
+                    txn.description,
+                    Text(accounts),
+                    txn.total_amount,
+                    key=str(txn.index),
+                )
+
         distribute_column_widths(table, self._TXN_FIXED, self._TXN_FLEX)
 
     # ------------------------------------------------------------------

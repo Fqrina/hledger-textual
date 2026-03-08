@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from textual import work
@@ -194,8 +194,17 @@ class TransactionsPane(Widget):
 
     @work(thread=True, exclusive=True, group="txn-summary")
     def _load_summary(self, month: date) -> None:
-        """Load the period summary for *month* in a background thread."""
-        period = month.strftime("%Y-%m")
+        """Load the period summary for *month* in a background thread.
+
+        When *month* is the current calendar month the date range is capped at
+        today so that scheduled (future) transactions do not inflate the totals.
+        """
+        today = date.today()
+        if month.year == today.year and month.month == today.month:
+            end = today + timedelta(days=1)
+            period = f"{month.isoformat()}..{end.isoformat()}"
+        else:
+            period = month.strftime("%Y-%m")
         try:
             summary = load_period_summary(self.journal_file, period)
         except HledgerError:

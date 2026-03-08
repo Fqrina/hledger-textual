@@ -23,11 +23,14 @@ from hledger_textual.recurring import (
     parse_recurring_rules,
     update_recurring_rule,
 )
-from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 
 
-class RecurringPane(Widget):
+class RecurringPane(DataTablePaneMixin, Widget):
     """Widget for managing recurring transaction rules."""
+
+    _main_table_id = "recurring-table"
+    _fixed_column_widths = {0: 12, 2: 10}
 
     BINDINGS = [
         Binding("a", "add", "Add", show=True, priority=True),
@@ -54,15 +57,13 @@ class RecurringPane(Widget):
         self._recurring_path: Path | None = None
         self._rules: list[RecurringRule] = []
 
-    _RECURRING_FIXED = {0: 12, 2: 10}
-
     def compose(self) -> ComposeResult:
         """Create the pane layout."""
         yield DataTable(id="recurring-table")
 
     def on_mount(self) -> None:
         """Set up the DataTable and load recurring rules."""
-        table = self.query_one("#recurring-table", DataTable)
+        table = self._get_main_table()
         table.cursor_type = "row"
         table.add_column("Period", width=12)
         table.add_column("Description", width=20)
@@ -70,15 +71,6 @@ class RecurringPane(Widget):
         table.add_column("Postings", width=20)
         self._load_data()
         table.focus()
-
-    def on_show(self) -> None:
-        """Restore focus to the table when the pane becomes visible."""
-        self.query_one("#recurring-table", DataTable).focus()
-
-    def on_resize(self) -> None:
-        """Recalculate column widths on resize."""
-        table = self.query_one("#recurring-table", DataTable)
-        distribute_column_widths(table, self._RECURRING_FIXED)
 
     @work(thread=True, exclusive=True)
     def _load_data(self) -> None:
@@ -221,14 +213,6 @@ class RecurringPane(Widget):
         """Reload recurring rules."""
         self._load_data()
         self.notify("Refreshed", timeout=2)
-
-    def action_cursor_down(self) -> None:
-        """Move cursor down in the table."""
-        self.query_one("#recurring-table", DataTable).action_cursor_down()
-
-    def action_cursor_up(self) -> None:
-        """Move cursor up in the table."""
-        self.query_one("#recurring-table", DataTable).action_cursor_up()
 
     # --- Mutation workers ---
 

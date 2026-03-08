@@ -25,12 +25,15 @@ from hledger_textual.budget import (
 )
 from hledger_textual.hledger import HledgerError, load_budget_report
 from hledger_textual.models import BudgetRow, BudgetRule
-from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 
-class BudgetPane(Widget):
+class BudgetPane(DataTablePaneMixin, Widget):
     """Widget showing budget rules with actual vs budget comparison."""
+
+    _main_table_id = "budget-table"
+    _fixed_column_widths = {1: 14, 2: 14, 3: 14, 4: 10}
 
     BINDINGS = [
         Binding("a", "add", "Add", show=True, priority=True),
@@ -78,28 +81,17 @@ class BudgetPane(Widget):
 
         yield DataTable(id="budget-table")
 
-    _BUDGET_FIXED = {1: 14, 2: 14, 3: 14, 4: 10}
-
     def on_mount(self) -> None:
         """Set up the DataTable and load budget data."""
-        table = self.query_one("#budget-table", DataTable)
+        table = self._get_main_table()
         table.cursor_type = "row"
         table.add_column("Account", width=20)
-        table.add_column("Budget", width=self._BUDGET_FIXED[1])
-        table.add_column("Actual", width=self._BUDGET_FIXED[2])
-        table.add_column("Remaining", width=self._BUDGET_FIXED[3])
-        table.add_column("% Used", width=self._BUDGET_FIXED[4])
+        table.add_column("Budget", width=self._fixed_column_widths[1])
+        table.add_column("Actual", width=self._fixed_column_widths[2])
+        table.add_column("Remaining", width=self._fixed_column_widths[3])
+        table.add_column("% Used", width=self._fixed_column_widths[4])
         self._load_budget_data()
         table.focus()
-
-    def on_show(self) -> None:
-        """Restore focus to the table when the pane becomes visible."""
-        self.query_one("#budget-table", DataTable).focus()
-
-    def on_resize(self) -> None:
-        """Recalculate column widths when the pane is resized."""
-        table = self.query_one("#budget-table", DataTable)
-        distribute_column_widths(table, self._BUDGET_FIXED)
 
     def _period_label(self) -> str:
         """Return the formatted period label for the current month."""
@@ -293,14 +285,6 @@ class BudgetPane(Widget):
         """Jump to the current month."""
         self._current_month = date.today().replace(day=1)
         self._load_budget_data()
-
-    def action_cursor_down(self) -> None:
-        """Move cursor down in the table."""
-        self.query_one("#budget-table", DataTable).action_cursor_down()
-
-    def action_cursor_up(self) -> None:
-        """Move cursor up in the table."""
-        self.query_one("#budget-table", DataTable).action_cursor_up()
 
     # --- Event handlers ---
 

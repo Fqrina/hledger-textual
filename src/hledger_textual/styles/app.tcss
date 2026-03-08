@@ -278,14 +278,18 @@ AccountTransactionsScreen {
     padding: 0 1;
 }
 
-/* --- Delete Confirmation Modal --- */
+/* --- Delete Confirmation Modals (shared) --- */
 
-DeleteConfirmModal {
+DeleteConfirmModal,
+BudgetDeleteConfirmModal,
+RecurringDeleteConfirmModal {
     align: center middle;
     background: $surface 60%;
 }
 
-#delete-dialog {
+#delete-dialog,
+#budget-delete-dialog,
+#recurring-delete-dialog {
     width: 60;
     height: auto;
     max-height: 20;
@@ -294,7 +298,9 @@ DeleteConfirmModal {
     padding: 1 2;
 }
 
-#delete-title {
+#delete-title,
+#budget-delete-title,
+#recurring-delete-title {
     text-style: bold;
     color: $error;
     width: 100%;
@@ -302,21 +308,29 @@ DeleteConfirmModal {
     margin-bottom: 1;
 }
 
-#delete-summary {
+#delete-summary,
+#budget-delete-summary,
+#recurring-delete-summary {
     margin-bottom: 1;
     height: auto;
 }
 
-#delete-buttons {
+#delete-buttons,
+#budget-delete-buttons,
+#recurring-delete-buttons {
     height: 3;
     align: center middle;
 }
 
-#delete-buttons Button {
+#delete-buttons Button,
+#budget-delete-buttons Button,
+#recurring-delete-buttons Button {
     margin: 0 1;
 }
 
-#btn-delete {
+#btn-delete,
+#btn-budget-delete,
+#btn-recurring-delete {
     background: $error;
 }
 
@@ -525,47 +539,6 @@ BudgetFormScreen {
     margin: 0 1;
 }
 
-/* --- Budget Delete Confirmation Modal --- */
-
-BudgetDeleteConfirmModal {
-    align: center middle;
-    background: $surface 60%;
-}
-
-#budget-delete-dialog {
-    width: 60;
-    height: auto;
-    max-height: 20;
-    border: thick $error;
-    background: $surface;
-    padding: 1 2;
-}
-
-#budget-delete-title {
-    text-style: bold;
-    color: $error;
-    width: 100%;
-    text-align: center;
-    margin-bottom: 1;
-}
-
-#budget-delete-summary {
-    margin-bottom: 1;
-    height: auto;
-}
-
-#budget-delete-buttons {
-    height: 3;
-    align: center middle;
-}
-
-#budget-delete-buttons Button {
-    margin: 0 1;
-}
-
-#btn-budget-delete {
-    background: $error;
-}
 
 /* --- Reports Pane --- */
 
@@ -594,43 +567,39 @@ PaneToolbar Select {
     display: block;
 }
 
-/* --- Info Pane --- */
+/* --- About Modal --- */
 
-InfoPane {
-    height: 1fr;
-    layout: vertical;
-    overflow-y: auto;
+AboutModal {
+    align: center middle;
+    background: $surface 60%;
 }
 
-#info-columns {
-    height: auto;
+#about-dialog {
+    width: 64;
+    max-width: 90%;
+    height: 24;
+    border: thick $accent;
+    background: $surface;
+    padding: 1 3;
 }
 
-.info-column {
-    width: 1fr;
-}
-
-.info-section {
-    height: auto;
-    padding: 0 1;
-}
-
-.info-section-title {
+#about-title {
     text-style: bold;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
     color: $accent;
-    padding: 0 1;
-    margin-top: 1;
 }
 
-.info-row {
+#about-app, #about-journal, #about-tools, #about-git {
     height: auto;
-    min-height: 1;
-    padding: 0 1;
-    align: left middle;
+    margin-bottom: 1;
 }
 
-.info-label {
-    width: 16;
+#about-footer {
+    width: 100%;
+    text-align: center;
+    margin-top: 1;
     color: $text-muted;
 }
 
@@ -687,47 +656,6 @@ RecurringPane {
     height: 1fr;
 }
 
-/* --- Recurring Delete Confirmation Modal --- */
-
-RecurringDeleteConfirmModal {
-    align: center middle;
-    background: $surface 60%;
-}
-
-#recurring-delete-dialog {
-    width: 60;
-    height: auto;
-    max-height: 20;
-    border: thick $error;
-    background: $surface;
-    padding: 1 2;
-}
-
-#recurring-delete-title {
-    text-style: bold;
-    color: $error;
-    width: 100%;
-    text-align: center;
-    margin-bottom: 1;
-}
-
-#recurring-delete-summary {
-    margin-bottom: 1;
-    height: auto;
-}
-
-#recurring-delete-buttons {
-    height: 3;
-    align: center middle;
-}
-
-#recurring-delete-buttons Button {
-    margin: 0 1;
-}
-
-#btn-recurring-delete {
-    background: $error;
-}
 
 /* --- Recurring Generate Screen --- */
 
@@ -782,33 +710,6 @@ RecurringFormScreen {
 }
 
 /* Theme Picker Modal --- */
-
-ThemePickerModal {
-    align: center middle;
-    background: $surface 60%;
-}
-
-#theme-dialog {
-    width: 40;
-    height: auto;
-    max-height: 20;
-    border: thick $accent;
-    background: $surface;
-    padding: 1 2;
-}
-
-#theme-title {
-    text-style: bold;
-    width: 100%;
-    text-align: center;
-    margin-bottom: 1;
-    color: $accent;
-}
-
-#theme-list {
-    height: auto;
-    max-height: 14;
-}
 
 /* --- Move Confirmation Modal --- */
 

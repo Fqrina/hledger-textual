@@ -101,7 +101,7 @@ class TestRecurringDeleteConfirmModal:
         app = _App()
         async with app.run_test() as pilot:
             await pilot.pause()
-            btn = app.screen.query_one("#btn-recurring-del-cancel")
+            btn = app.screen.query_one("#btn-recurring-delete-cancel")
             await pilot.click(btn)
             await pilot.pause()
             assert results == [False]

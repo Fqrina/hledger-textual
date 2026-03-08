@@ -9,13 +9,12 @@ in ``journal.py``.
 from __future__ import annotations
 
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 
-from hledger_textual.fileutil import backup as _backup
-from hledger_textual.fileutil import cleanup_backup as _cleanup_backup
-from hledger_textual.fileutil import restore as _restore
-from hledger_textual.hledger import HledgerError, check_journal
+from hledger_textual.amountutil import parse_amount_string as _parse_amount_string_raw
+from hledger_textual.fileutil import safe_write_with_validation
+from hledger_textual.hledger import check_journal
 from hledger_textual.models import Amount, AmountStyle, BudgetRule
 
 BUDGET_FILENAME = "budget.journal"
@@ -60,42 +59,11 @@ def ensure_budget_file(journal_file: Path) -> Path:
 
 
 def _parse_amount_string(s: str) -> tuple[Decimal, str]:
-    """Parse an amount string like '€800.00' or '150.00 EUR' into (quantity, commodity).
-
-    Args:
-        s: The amount string to parse.
-
-    Returns:
-        A tuple of (quantity, commodity).
-
-    Raises:
-        BudgetError: If the amount cannot be parsed.
-    """
-    s = s.strip()
-    if not s:
-        raise BudgetError("Empty amount string")
-
-    # Try left-side commodity: €800.00 or $500
-    match = re.match(r"^([^\d\s.-]+)\s*(-?[\d.]+)$", s)
-    if match:
-        commodity = match.group(1)
-        try:
-            quantity = Decimal(match.group(2))
-        except InvalidOperation:
-            raise BudgetError(f"Invalid amount: {s}")
-        return quantity, commodity
-
-    # Try right-side commodity: 800.00 EUR
-    match = re.match(r"^(-?[\d.]+)\s*([^\d\s.-]+)$", s)
-    if match:
-        try:
-            quantity = Decimal(match.group(1))
-        except InvalidOperation:
-            raise BudgetError(f"Invalid amount: {s}")
-        commodity = match.group(2)
-        return quantity, commodity
-
-    raise BudgetError(f"Cannot parse amount: {s}")
+    """Parse an amount string, wrapping ValueError as BudgetError."""
+    try:
+        return _parse_amount_string_raw(s)
+    except ValueError as exc:
+        raise BudgetError(str(exc)) from exc
 
 
 def parse_budget_rules(budget_path: Path) -> list[BudgetRule]:
@@ -183,7 +151,6 @@ def _format_budget_file(rules: list[BudgetRule]) -> str:
     return "\n".join(lines)
 
 
-
 def write_budget_rules(
     budget_path: Path, rules: list[BudgetRule], journal_file: Path
 ) -> None:
@@ -199,26 +166,14 @@ def write_budget_rules(
     Raises:
         BudgetError: If validation fails (file is restored from backup).
     """
-    backup = _backup(budget_path)
-
-    try:
-        content = _format_budget_file(rules)
-        budget_path.write_text(content)
-
-        try:
-            check_journal(journal_file)
-        except HledgerError as exc:
-            _restore(budget_path, backup)
-            _cleanup_backup(backup)
-            raise BudgetError(f"Budget validation failed, changes reverted: {exc}")
-
-        _cleanup_backup(backup)
-    except BudgetError:
-        raise
-    except Exception as exc:
-        _restore(budget_path, backup)
-        _cleanup_backup(backup)
-        raise BudgetError(f"Failed to write budget rules: {exc}")
+    safe_write_with_validation(
+        target_file=budget_path,
+        content=_format_budget_file(rules),
+        journal_file=journal_file,
+        validate=check_journal,
+        error_cls=BudgetError,
+        context="Budget",
+    )
 
 
 def add_budget_rule(
