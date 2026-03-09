@@ -45,8 +45,8 @@ class DeleteConfirmBase(ModalScreen[bool]):
             yield Label(self._title, id=f"{p}-title")
             yield Static(self._summary, id=f"{p}-summary")
             with Horizontal(id=f"{p}-buttons"):
-                yield Button("Delete", variant="error", id=f"btn-{p}")
                 yield Button("Cancel", variant="default", id=f"btn-{p}-cancel")
+                yield Button("Delete", variant="error", id=f"btn-{p}")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""

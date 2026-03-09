@@ -64,8 +64,8 @@ class MoveConfirmModal(ModalScreen[str | None]):
                     "\u25ba", id="move-btn-next", classes="move-arrow"
                 )
             with Horizontal(id="move-buttons"):
-                yield Button("Move", variant="default", id="btn-move-confirm")
                 yield Button("Cancel", variant="default", id="btn-move-cancel")
+                yield Button("Move", variant="primary", id="btn-move-confirm")
 
     def _update_date(self) -> None:
         """Update the date input with the current new date."""

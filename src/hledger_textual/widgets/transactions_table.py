@@ -176,6 +176,8 @@ class TransactionsTable(Widget):
         nav = self.query("#txn-period-nav")
         if nav:
             nav.first().add_class("hidden")
+        toolbar = self.query_one(PaneToolbar)
+        toolbar.add_class("visible")
         filter_bar = self.query_one(".filter-bar")
         filter_bar.add_class("visible")
         search_input = self.query_one("#txn-search-input", Input)
@@ -193,6 +195,8 @@ class TransactionsTable(Widget):
         if not filter_bar.has_class("visible"):
             return False
         filter_bar.remove_class("visible")
+        toolbar = self.query_one(PaneToolbar)
+        toolbar.remove_class("visible")
         search_input = self.query_one("#txn-search-input", Input)
         search_input.value = ""
         search_input.disabled = True

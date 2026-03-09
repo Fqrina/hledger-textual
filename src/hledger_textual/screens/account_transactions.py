@@ -7,10 +7,11 @@ from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Label, Static
 
+from hledger_textual.hledger import load_account_directives, save_account_directive
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
 
@@ -28,6 +29,7 @@ class AccountTransactionsScreen(Screen):
         Binding("e", "edit", "Edit", show=True, priority=True),
         Binding("enter", "edit", "Edit", show=False),
         Binding("d", "delete", "Delete", show=True, priority=True),
+        Binding("n", "edit_note", "Note", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
     ]
 
@@ -58,10 +60,29 @@ class AccountTransactionsScreen(Screen):
         fixed_query = f"acct:^{re.escape(self.account)}$"
         yield TransactionsTable(self.journal_file, fixed_query=fixed_query)
 
-        yield Static(
-            "\\[Esc] Back  \\[/] Search  \\[e] Edit  \\[d] Delete  \\[r] Refresh  \\[?] Help",
-            id="acctxn-footer",
-        )
+        with Vertical(id="acctxn-bottom"):
+            yield Static("", id="acctxn-note")
+            yield Static(
+                "\\[Esc] Back  \\[/] Search  \\[e] Edit  \\[d] Delete"
+                "  \\[n] Note  \\[r] Refresh  \\[?] Help",
+                id="acctxn-footer",
+            )
+
+    def on_mount(self) -> None:
+        """Load and display account metadata after mount."""
+        self._refresh_metadata()
+
+    def _refresh_metadata(self) -> None:
+        """Load account directive metadata and update the note section."""
+        directives = load_account_directives(self.journal_file)
+        directive = directives.get(self.account)
+        note_widget = self.query_one("#acctxn-note", Static)
+        if directive and directive.comment:
+            note_widget.update(f" Note: {directive.comment}")
+            note_widget.display = True
+        else:
+            note_widget.update("")
+            note_widget.display = False
 
     @property
     def _table(self) -> TransactionsTable:
@@ -88,6 +109,25 @@ class AccountTransactionsScreen(Screen):
         """Delete the selected transaction (with confirmation)."""
         self._table.do_delete()
 
+    def action_edit_note(self) -> None:
+        """Open a dialog to edit the account note/comment."""
+        from hledger_textual.screens.account_note_form import AccountNoteModal
+
+        directives = load_account_directives(self.journal_file)
+        directive = directives.get(self.account)
+        current_note = directive.comment if directive else ""
+
+        def on_result(note: str | None) -> None:
+            if note is not None:
+                save_account_directive(self.journal_file, self.account, note)
+                self._refresh_metadata()
+                self.notify("Note saved", timeout=2)
+
+        self.app.push_screen(
+            AccountNoteModal(self.account, current_note), callback=on_result
+        )
+
     def action_refresh(self) -> None:
         """Reload transactions from the journal."""
         self._table.do_refresh()
+        self._refresh_metadata()

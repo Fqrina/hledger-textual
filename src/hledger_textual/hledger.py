@@ -280,6 +280,72 @@ def load_account_balances(file: str | Path) -> list[tuple[str, str]]:
     ]
 
 
+def load_account_tree_balances(file: str | Path) -> list["AccountNode"]:
+    """Load accounts as a tree with hierarchical balances.
+
+    Uses ``hledger balance --tree`` to get indented account names with
+    subtotals for parent accounts.
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A list of root-level :class:`AccountNode` instances, each with
+        nested children reflecting the account hierarchy.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    from hledger_textual.models import AccountNode
+
+    output = run_hledger("balance", "--tree", "--no-total", "-O", "csv", file=file)
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header row
+
+    # Build flat list with depth info from leading spaces
+    flat_nodes: list[AccountNode] = []
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        raw_name = row[0]
+        balance = row[1]
+        stripped = raw_name.lstrip(" \xa0")
+        depth = len(raw_name) - len(stripped)
+        # hledger uses 2-space indentation per level
+        depth = depth // 2
+        flat_nodes.append(AccountNode(
+            name=stripped,
+            full_path="",  # resolved below
+            balance=balance,
+            depth=depth,
+        ))
+
+    # Resolve full_path and build parent-child relationships
+    roots: list[AccountNode] = []
+    stack: list[AccountNode] = []
+
+    for node in flat_nodes:
+        # Pop stack to find parent at depth - 1
+        while len(stack) > node.depth:
+            stack.pop()
+
+        if stack:
+            parent = stack[-1]
+            node.full_path = f"{parent.full_path}:{node.name}"
+            parent.children.append(node)
+        else:
+            node.full_path = node.name
+            roots.append(node)
+
+        # Ensure stack has exactly depth+1 entries
+        if len(stack) == node.depth:
+            stack.append(node)
+        else:
+            stack[node.depth] = node
+
+    return roots
+
+
 def load_accounts(file: str | Path) -> list[str]:
     """Load all account names from a journal file.
 
@@ -294,6 +360,136 @@ def load_accounts(file: str | Path) -> list[str]:
     """
     output = run_hledger("accounts", file=file)
     return [line.strip() for line in output.strip().splitlines() if line.strip()]
+
+
+def load_account_directives(file: str | Path) -> dict[str, "AccountDirective"]:
+    """Parse ``account`` directives and their comments from a journal file.
+
+    Reads the file directly (the hledger CLI does not export directive
+    comments).  Supports both single-line and multi-line comments::
+
+        account expenses:groceries  ; note:Weekly shopping
+            ; category:food
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A dict mapping full account names to :class:`AccountDirective`
+        instances.  Only accounts that have an ``account`` directive in
+        the file are included.
+    """
+    from hledger_textual.models import AccountDirective
+
+    path = Path(file)
+    if not path.exists():
+        return {}
+
+    directives: dict[str, AccountDirective] = {}
+    current: AccountDirective | None = None
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        # Match "account <name>" optionally followed by "  ; comment"
+        m = re.match(r"^account\s+(\S+)\s*(?:;\s*(.*))?$", line)
+        if m:
+            name = m.group(1)
+            comment_part = (m.group(2) or "").strip()
+            tags = _parse_comment_tags(comment_part)
+            current = AccountDirective(
+                name=name,
+                comment=comment_part,
+                tags=tags,
+            )
+            directives[name] = current
+            continue
+
+        # Continuation comment line (indented, starts with ;)
+        if current is not None:
+            cm = re.match(r"^\s+;\s*(.*)$", line)
+            if cm:
+                extra = cm.group(1).strip()
+                if current.comment:
+                    current.comment += ", " + extra
+                else:
+                    current.comment = extra
+                current.tags.update(_parse_comment_tags(extra))
+                continue
+
+        # Any non-continuation line ends the current directive
+        current = None
+
+    return directives
+
+
+def _parse_comment_tags(comment: str) -> dict[str, str]:
+    """Extract ``key:value`` tags from a comment string.
+
+    Args:
+        comment: The comment text (without the leading ``;``).
+
+    Returns:
+        A dict of tag names to values.
+    """
+    tags: dict[str, str] = {}
+    for m in re.finditer(r"(\w[\w-]*):\s*([^,;]+)", comment):
+        tags[m.group(1)] = m.group(2).strip()
+    return tags
+
+
+def save_account_directive(
+    file: str | Path,
+    account: str,
+    comment: str,
+) -> None:
+    """Add or update an ``account`` directive in the journal file.
+
+    If the account already has a directive, its comment is replaced.
+    Otherwise a new directive is appended at the top of the file (after
+    any leading comments/blanks).
+
+    Args:
+        file: Path to the journal file.
+        account: Full account name (e.g. ``"expenses:groceries"``).
+        comment: The comment text (without leading ``;``).  If empty,
+            any existing comment is removed but the directive is kept.
+    """
+    path = Path(file)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    comment_suffix = f"  ; {comment}" if comment else ""
+    new_line = f"account {account}{comment_suffix}"
+
+    # Try to find and replace an existing directive
+    found = False
+    i = 0
+    while i < len(lines):
+        m = re.match(r"^account\s+(\S+)", lines[i])
+        if m and m.group(1) == account:
+            lines[i] = new_line
+            found = True
+            # Remove any continuation comment lines
+            while i + 1 < len(lines) and re.match(r"^\s+;", lines[i + 1]):
+                lines.pop(i + 1)
+            break
+        i += 1
+
+    if not found:
+        # Insert before the first transaction (first line starting with a date)
+        insert_at = 0
+        for idx, line in enumerate(lines):
+            if re.match(r"^\d{4}[-/]", line):
+                insert_at = idx
+                break
+        else:
+            insert_at = len(lines)
+        # Add a blank line separator if needed
+        if insert_at > 0 and lines[insert_at - 1].strip():
+            lines.insert(insert_at, "")
+            insert_at += 1
+        lines.insert(insert_at, new_line)
+        if insert_at + 1 < len(lines) and lines[insert_at + 1].strip():
+            lines.insert(insert_at + 1, "")
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def load_descriptions(file: str | Path) -> list[str]:
