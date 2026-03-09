@@ -280,6 +280,72 @@ def load_account_balances(file: str | Path) -> list[tuple[str, str]]:
     ]
 
 
+def load_account_tree_balances(file: str | Path) -> list["AccountNode"]:
+    """Load accounts as a tree with hierarchical balances.
+
+    Uses ``hledger balance --tree`` to get indented account names with
+    subtotals for parent accounts.
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A list of root-level :class:`AccountNode` instances, each with
+        nested children reflecting the account hierarchy.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    from hledger_textual.models import AccountNode
+
+    output = run_hledger("balance", "--tree", "--no-total", "-O", "csv", file=file)
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header row
+
+    # Build flat list with depth info from leading spaces
+    flat_nodes: list[AccountNode] = []
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        raw_name = row[0]
+        balance = row[1]
+        stripped = raw_name.lstrip(" \xa0")
+        depth = len(raw_name) - len(stripped)
+        # hledger uses 2-space indentation per level
+        depth = depth // 2
+        flat_nodes.append(AccountNode(
+            name=stripped,
+            full_path="",  # resolved below
+            balance=balance,
+            depth=depth,
+        ))
+
+    # Resolve full_path and build parent-child relationships
+    roots: list[AccountNode] = []
+    stack: list[AccountNode] = []
+
+    for node in flat_nodes:
+        # Pop stack to find parent at depth - 1
+        while len(stack) > node.depth:
+            stack.pop()
+
+        if stack:
+            parent = stack[-1]
+            node.full_path = f"{parent.full_path}:{node.name}"
+            parent.children.append(node)
+        else:
+            node.full_path = node.name
+            roots.append(node)
+
+        # Ensure stack has exactly depth+1 entries
+        if len(stack) == node.depth:
+            stack.append(node)
+        else:
+            stack[node.depth] = node
+
+    return roots
+
+
 def load_accounts(file: str | Path) -> list[str]:
     """Load all account names from a journal file.
 

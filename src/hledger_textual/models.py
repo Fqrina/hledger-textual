@@ -267,6 +267,22 @@ class RecurringRule:
 
 
 @dataclass
+class AccountNode:
+    """A node in the account hierarchy tree.
+
+    Each node represents an account at a certain depth, with optional
+    children and an expand/collapse state for tree rendering.
+    """
+
+    name: str
+    full_path: str
+    balance: str
+    depth: int
+    children: list[AccountNode] = field(default_factory=list)
+    expanded: bool = True
+
+
+@dataclass
 class AccountDirective:
     """An hledger account directive with optional metadata.
 

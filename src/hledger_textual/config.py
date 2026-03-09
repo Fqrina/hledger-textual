@@ -104,6 +104,27 @@ def load_price_tickers() -> dict[str, str]:
     return {str(k): str(v) for k, v in prices.items()}
 
 
+def load_accounts_view() -> str:
+    """Return the saved accounts view mode, or ``"flat"`` if not set.
+
+    Returns:
+        ``"flat"`` or ``"tree"``.
+    """
+    val = _load_config_dict().get("accounts_view", "flat")
+    return val if val in ("flat", "tree") else "flat"
+
+
+def save_accounts_view(view: str) -> None:
+    """Persist the selected accounts view mode to config.toml.
+
+    Args:
+        view: View mode to save (``"flat"`` or ``"tree"``).
+    """
+    data = _load_config_dict()
+    data["accounts_view"] = view
+    _save_config_dict(data)
+
+
 def load_auto_generate_recurring() -> bool:
     """Return whether automatic generation of recurring transactions on startup is enabled.
 
