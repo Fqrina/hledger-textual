@@ -136,8 +136,8 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
                     yield Button("\\[-] Remove last", id="btn-remove-posting")
 
             with Horizontal(id="form-buttons"):
-                yield Button("Cancel", id="btn-form-cancel")
-                yield Button("Save", id="btn-save")
+                yield Button("Cancel", variant="default", id="btn-form-cancel")
+                yield Button("Save", variant="primary", id="btn-save")
 
     def on_mount(self) -> None:
         """Load accounts for autocomplete and populate posting rows."""

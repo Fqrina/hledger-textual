@@ -78,8 +78,8 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
                 )
 
             with Horizontal(id="budget-form-buttons"):
-                yield Button("Cancel", id="btn-budget-cancel")
-                yield Button("Save", id="btn-budget-save")
+                yield Button("Cancel", variant="default", id="btn-budget-cancel")
+                yield Button("Save", variant="primary", id="btn-budget-save")
 
     def on_mount(self) -> None:
         """Load accounts for autocomplete."""

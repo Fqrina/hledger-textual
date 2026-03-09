@@ -251,6 +251,20 @@ AccountTransactionsScreen {
     background: $surface;
 }
 
+AccountTransactionsScreen PaneToolbar {
+    display: none;
+    height: 0;
+    margin: 0;
+    padding: 0;
+}
+
+AccountTransactionsScreen PaneToolbar.visible {
+    display: block;
+    height: 3;
+    margin: 1 0;
+    padding: 0 1;
+}
+
 #acctxn-header {
     dock: top;
     height: 1;
@@ -270,12 +284,60 @@ AccountTransactionsScreen {
     text-style: italic;
 }
 
-#acctxn-footer {
+#acctxn-bottom {
     dock: bottom;
+    height: auto;
+}
+
+#acctxn-note {
+    height: auto;
+    max-height: 3;
+    background: $accent;
+    color: $text;
+    text-style: italic;
+    padding: 0 1;
+}
+
+#acctxn-footer {
     height: 1;
     background: $panel;
     color: $text-muted;
     padding: 0 1;
+}
+
+/* --- Account Note Modal --- */
+
+AccountNoteModal {
+    align: center middle;
+    background: $surface 60%;
+}
+
+#note-dialog {
+    width: 70;
+    height: auto;
+    max-height: 20;
+    background: $panel;
+    border: thick $accent;
+    padding: 1 2;
+}
+
+#note-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#note-input {
+    height: 6;
+    margin-bottom: 1;
+}
+
+#note-buttons {
+    height: 3;
+    align: right middle;
+}
+
+#note-buttons Button {
+    width: 1fr;
 }
 
 /* --- Delete Confirmation Modals (shared) --- */
@@ -319,13 +381,13 @@ RecurringDeleteConfirmModal {
 #budget-delete-buttons,
 #recurring-delete-buttons {
     height: 3;
-    align: center middle;
+    align: right middle;
 }
 
 #delete-buttons Button,
 #budget-delete-buttons Button,
 #recurring-delete-buttons Button {
-    margin: 0 1;
+    width: 1fr;
 }
 
 #btn-delete,
@@ -480,7 +542,7 @@ PostingRow {
 }
 
 #form-buttons Button {
-    margin: 0 1;
+    width: 1fr;
 }
 
 /* --- Budget Pane --- */
@@ -536,7 +598,7 @@ BudgetFormScreen {
 }
 
 #budget-form-buttons Button {
-    margin: 0 1;
+    width: 1fr;
 }
 
 
@@ -636,12 +698,11 @@ SyncConfirmModal {
 
 #sync-buttons {
     height: 3;
-    align: center middle;
+    align: right middle;
 }
 
 #sync-buttons Button {
-    min-width: 16;
-    margin: 0 1;
+    width: 1fr;
 }
 
 /* --- Recurring Pane --- */
@@ -695,11 +756,11 @@ RecurringGenerateScreen {
 
 #recurring-generate-buttons {
     height: 3;
-    align: center middle;
+    align: right middle;
 }
 
 #recurring-generate-buttons Button {
-    margin: 0 1;
+    width: 1fr;
 }
 
 /* --- Recurring Form Screen --- */
@@ -766,11 +827,11 @@ MoveConfirmModal {
 
 #move-buttons {
     height: 3;
-    align: center middle;
+    align: right middle;
 }
 
 #move-buttons Button {
-    margin: 0 1;
+    width: 1fr;
 }
 
 /* --- Help Screen --- */

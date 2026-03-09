@@ -43,10 +43,10 @@ class RecurringGenerateScreen(ModalScreen[bool]):
             yield Static(summary, id="recurring-generate-summary")
             yield DataTable(id="recurring-generate-table")
             with Horizontal(id="recurring-generate-buttons"):
+                yield Button("Cancel", variant="default", id="btn-recurring-gen-cancel")
                 yield Button(
                     "Generate All", variant="success", id="btn-recurring-generate"
                 )
-                yield Button("Cancel", variant="default", id="btn-recurring-gen-cancel")
 
     def on_mount(self) -> None:
         """Populate the preview table."""

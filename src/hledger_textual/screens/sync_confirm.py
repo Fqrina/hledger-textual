@@ -24,8 +24,8 @@ class SyncConfirmModal(ModalScreen[bool]):
                 id="sync-summary",
             )
             with Horizontal(id="sync-buttons"):
-                yield Button("Sync", variant="primary", id="btn-sync")
                 yield Button("Cancel", variant="default", id="btn-sync-cancel")
+                yield Button("Sync", variant="primary", id="btn-sync")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
