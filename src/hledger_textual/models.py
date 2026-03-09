@@ -267,6 +267,20 @@ class RecurringRule:
 
 
 @dataclass
+class AccountDirective:
+    """An hledger account directive with optional metadata.
+
+    Represents a line like::
+
+        account expenses:groceries  ; note:Weekly shopping, category:food
+    """
+
+    name: str
+    comment: str = ""
+    tags: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class ReportData:
     """Parsed output of a multi-period hledger report (IS, BS, CF).
 

@@ -296,6 +296,136 @@ def load_accounts(file: str | Path) -> list[str]:
     return [line.strip() for line in output.strip().splitlines() if line.strip()]
 
 
+def load_account_directives(file: str | Path) -> dict[str, "AccountDirective"]:
+    """Parse ``account`` directives and their comments from a journal file.
+
+    Reads the file directly (the hledger CLI does not export directive
+    comments).  Supports both single-line and multi-line comments::
+
+        account expenses:groceries  ; note:Weekly shopping
+            ; category:food
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A dict mapping full account names to :class:`AccountDirective`
+        instances.  Only accounts that have an ``account`` directive in
+        the file are included.
+    """
+    from hledger_textual.models import AccountDirective
+
+    path = Path(file)
+    if not path.exists():
+        return {}
+
+    directives: dict[str, AccountDirective] = {}
+    current: AccountDirective | None = None
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        # Match "account <name>" optionally followed by "  ; comment"
+        m = re.match(r"^account\s+(\S+)\s*(?:;\s*(.*))?$", line)
+        if m:
+            name = m.group(1)
+            comment_part = (m.group(2) or "").strip()
+            tags = _parse_comment_tags(comment_part)
+            current = AccountDirective(
+                name=name,
+                comment=comment_part,
+                tags=tags,
+            )
+            directives[name] = current
+            continue
+
+        # Continuation comment line (indented, starts with ;)
+        if current is not None:
+            cm = re.match(r"^\s+;\s*(.*)$", line)
+            if cm:
+                extra = cm.group(1).strip()
+                if current.comment:
+                    current.comment += ", " + extra
+                else:
+                    current.comment = extra
+                current.tags.update(_parse_comment_tags(extra))
+                continue
+
+        # Any non-continuation line ends the current directive
+        current = None
+
+    return directives
+
+
+def _parse_comment_tags(comment: str) -> dict[str, str]:
+    """Extract ``key:value`` tags from a comment string.
+
+    Args:
+        comment: The comment text (without the leading ``;``).
+
+    Returns:
+        A dict of tag names to values.
+    """
+    tags: dict[str, str] = {}
+    for m in re.finditer(r"(\w[\w-]*):\s*([^,;]+)", comment):
+        tags[m.group(1)] = m.group(2).strip()
+    return tags
+
+
+def save_account_directive(
+    file: str | Path,
+    account: str,
+    comment: str,
+) -> None:
+    """Add or update an ``account`` directive in the journal file.
+
+    If the account already has a directive, its comment is replaced.
+    Otherwise a new directive is appended at the top of the file (after
+    any leading comments/blanks).
+
+    Args:
+        file: Path to the journal file.
+        account: Full account name (e.g. ``"expenses:groceries"``).
+        comment: The comment text (without leading ``;``).  If empty,
+            any existing comment is removed but the directive is kept.
+    """
+    path = Path(file)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    comment_suffix = f"  ; {comment}" if comment else ""
+    new_line = f"account {account}{comment_suffix}"
+
+    # Try to find and replace an existing directive
+    found = False
+    i = 0
+    while i < len(lines):
+        m = re.match(r"^account\s+(\S+)", lines[i])
+        if m and m.group(1) == account:
+            lines[i] = new_line
+            found = True
+            # Remove any continuation comment lines
+            while i + 1 < len(lines) and re.match(r"^\s+;", lines[i + 1]):
+                lines.pop(i + 1)
+            break
+        i += 1
+
+    if not found:
+        # Insert before the first transaction (first line starting with a date)
+        insert_at = 0
+        for idx, line in enumerate(lines):
+            if re.match(r"^\d{4}[-/]", line):
+                insert_at = idx
+                break
+        else:
+            insert_at = len(lines)
+        # Add a blank line separator if needed
+        if insert_at > 0 and lines[insert_at - 1].strip():
+            lines.insert(insert_at, "")
+            insert_at += 1
+        lines.insert(insert_at, new_line)
+        if insert_at + 1 < len(lines) and lines[insert_at + 1].strip():
+            lines.insert(insert_at + 1, "")
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def load_descriptions(file: str | Path) -> list[str]:
     """Load all unique descriptions from a journal file.
 
