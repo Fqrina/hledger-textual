@@ -213,7 +213,7 @@ class HledgerTuiApp(App):
         summary._load_static_data()
         summary._load_breakdown_data()
         self.query_one(TransactionsPane).reload()
-        self.query_one(AccountsPane)._load_balances()
+        self.query_one(AccountsPane)._load_data()
         self.query_one(BudgetPane)._load_budget_data()
         self.query_one(ReportsPane)._load_report_data()
 
