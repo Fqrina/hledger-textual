@@ -7,11 +7,14 @@ import pytest
 from hledger_textual.config import (
     _load_config_dict,
     _save_config_dict,
+    delete_filter,
     load_default_commodity,
     load_price_tickers,
+    load_saved_filters,
     load_theme,
     parse_args,
     resolve_journal_file,
+    save_filter,
     save_theme,
 )
 
@@ -245,3 +248,75 @@ class TestSavePreservesNestedSections:
         loaded = _load_config_dict()
         assert loaded["theme"] == "gruvbox"
         assert loaded["prices"] == {"A": "A.DE", "B": "B.DE"}
+
+
+class TestSavedFilters:
+    """Tests for saved search filter CRUD in config.toml."""
+
+    def test_load_returns_empty_when_no_filters_section(self, tmp_path, monkeypatch):
+        """Returns an empty dict when config.toml has no [filters] section."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text('theme = "nord"\n')
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        assert load_saved_filters() == {}
+
+    def test_load_returns_empty_when_config_missing(self, tmp_path, monkeypatch):
+        """Returns an empty dict when the config file does not exist."""
+        monkeypatch.setattr(
+            "hledger_textual.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
+        )
+        assert load_saved_filters() == {}
+
+    def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
+        """save_filter persists a filter that load_saved_filters can retrieve."""
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        save_filter("groceries", "desc:grocery amt:>50")
+        result = load_saved_filters()
+        assert result == {"groceries": "desc:grocery amt:>50"}
+
+    def test_save_multiple_filters(self, tmp_path, monkeypatch):
+        """Multiple filters can be saved and all are returned."""
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        save_filter("groceries", "acct:food")
+        save_filter("big expenses", "amt:>500")
+        result = load_saved_filters()
+        assert result["groceries"] == "acct:food"
+        assert result["big expenses"] == "amt:>500"
+
+    def test_save_overwrites_existing_name(self, tmp_path, monkeypatch):
+        """Saving with an existing name updates the query."""
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        save_filter("work", "acct:income:salary")
+        save_filter("work", "acct:income:freelance")
+        assert load_saved_filters()["work"] == "acct:income:freelance"
+
+    def test_delete_removes_filter(self, tmp_path, monkeypatch):
+        """delete_filter removes the named filter from config."""
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        save_filter("groceries", "acct:food")
+        save_filter("big expenses", "amt:>500")
+        delete_filter("groceries")
+        result = load_saved_filters()
+        assert "groceries" not in result
+        assert result["big expenses"] == "amt:>500"
+
+    def test_delete_nonexistent_is_noop(self, tmp_path, monkeypatch):
+        """Deleting a filter that does not exist does not raise."""
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        save_filter("keep", "acct:food")
+        delete_filter("nonexistent")
+        assert load_saved_filters() == {"keep": "acct:food"}
+
+    def test_filters_preserved_when_saving_other_settings(self, tmp_path, monkeypatch):
+        """Saving a theme does not corrupt saved filters."""
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        save_filter("groceries", "acct:food")
+        save_theme("gruvbox")
+        assert load_saved_filters() == {"groceries": "acct:food"}
+        assert load_theme() == "gruvbox"

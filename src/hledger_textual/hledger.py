@@ -83,6 +83,8 @@ _QUERY_ALIASES: dict[str, str] = {
     "d:": "desc:",
     "ac:": "acct:",
     "am:": "amt:",
+    "t:": "tag:",
+    "st:": "status:",
 }
 
 def expand_search_query(query: str) -> str:

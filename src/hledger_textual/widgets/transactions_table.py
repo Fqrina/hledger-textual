@@ -130,7 +130,7 @@ class TransactionsTable(Widget):
                     )
             with Vertical(classes="filter-bar"):
                 yield Input(
-                    placeholder="Search... (e.g. d:grocery, ac:food, am:>100)",
+                    placeholder="Search... (e.g. d:grocery, ac:food, am:>100, t:tag, st:*)",
                     id="txn-search-input",
                     disabled=True,
                 )
@@ -214,6 +214,35 @@ class TransactionsTable(Widget):
         self.post_message(self.MonthChanged(self._current_month))
         self.query_one(DataTable).focus()
         return True
+
+    @property
+    def current_search_query(self) -> str:
+        """Return the currently active search query string."""
+        return self._search_query
+
+    def apply_saved_filter(self, query: str) -> None:
+        """Apply a saved filter query, bypassing month navigation.
+
+        Shows the search bar pre-filled with *query* and loads matching
+        transactions from the entire journal.
+
+        Args:
+            query: The hledger query string to apply.
+        """
+        self._search_query = query
+        self._date_query = ""
+        nav = self.query("#txn-period-nav")
+        if nav:
+            nav.first().add_class("hidden")
+        toolbar = self.query_one(PaneToolbar)
+        toolbar.add_class("visible")
+        filter_bar = self.query_one(".filter-bar")
+        filter_bar.add_class("visible")
+        search_input = self.query_one("#txn-search-input", Input)
+        search_input.disabled = False
+        search_input.value = query
+        self._load_transactions()
+        self.query_one(DataTable).focus()
 
     def get_selected_transaction(self) -> Transaction | None:
         """Return the transaction corresponding to the currently highlighted row."""

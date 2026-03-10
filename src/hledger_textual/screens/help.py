@@ -39,6 +39,8 @@ def _build_help_text() -> str:
                 ("Left / Right", "Navigate months"),
                 ("t", "Jump to today"),
                 ("/", "Search"),
+                ("f", "Saved filters"),
+                ("s", "Save current filter"),
                 ("r", "Refresh"),
             ],
         ),
