@@ -40,7 +40,7 @@ def _build_help_text() -> str:
                 ("t", "Jump to today"),
                 ("/", "Search"),
                 ("f", "Saved filters"),
-                ("s", "Save current filter"),
+                ("ctrl+s", "Save current filter"),
                 ("r", "Refresh"),
             ],
         ),
