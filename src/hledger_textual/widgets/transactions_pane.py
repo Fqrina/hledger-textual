@@ -33,6 +33,8 @@ class TransactionsPane(Widget):
         Binding("c", "clone", "Clone", show=True, priority=True),
         Binding("m", "move", "Move", show=True, priority=True),
         Binding("slash", "filter", "Search", show=True, priority=True),
+        Binding("f", "saved_filters", "Filters", show=False, priority=True),
+        Binding("ctrl+s", "save_filter", "Save Filter", show=False, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("left", "prev_month", "Previous month", show=False, priority=True),
@@ -105,6 +107,26 @@ class TransactionsPane(Widget):
     def action_dismiss_filter(self) -> None:
         """Hide the search bar and reset all filters."""
         self._table.dismiss_filter()
+
+    def action_saved_filters(self) -> None:
+        """Open the saved filters modal to browse and apply filters."""
+        from hledger_textual.screens.saved_filters import SavedFiltersModal
+
+        def on_select(query: str | None) -> None:
+            if query:
+                self._table.apply_saved_filter(query)
+
+        self.app.push_screen(SavedFiltersModal(), callback=on_select)
+
+    def action_save_filter(self) -> None:
+        """Save the current search filter with a user-chosen name."""
+        from hledger_textual.screens.save_filter import SaveFilterModal
+
+        query = self._table.current_search_query
+        if not query:
+            self.notify("No active filter to save", severity="warning", timeout=3)
+            return
+        self.app.push_screen(SaveFilterModal(current_query=query))
 
     def action_prev_month(self) -> None:
         """Navigate to the previous month."""

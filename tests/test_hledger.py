@@ -586,6 +586,19 @@ class TestExpandSearchQuery:
         """Plain text without colons is returned unchanged."""
         assert expand_search_query("grocery shopping") == "grocery shopping"
 
+    def test_t_alias(self):
+        """t: expands to tag:."""
+        assert expand_search_query("t:rule-id") == "tag:rule-id"
+
+    def test_st_alias(self):
+        """st: expands to status:."""
+        assert expand_search_query("st:*") == "status:*"
+
+    def test_t_alias_with_other_aliases(self):
+        """t: and other aliases expand correctly in the same query."""
+        result = expand_search_query("d:salary t:payroll")
+        assert result == "desc:salary tag:payroll"
+
 
 class TestLoadInvestmentReport:
     """Tests for load_investment_report using monkeypatched run_hledger."""

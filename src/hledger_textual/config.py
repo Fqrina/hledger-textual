@@ -40,6 +40,14 @@ def _save_config_dict(data: dict) -> None:
     sections (e.g. ``[prices]``).  This avoids corrupting section-based keys
     when only a scalar value like ``theme`` is updated.
     """
+    import re as _re
+
+    def _toml_key(k: str) -> str:
+        """Return a TOML-safe key, quoting it if it contains non-bare characters."""
+        if _re.fullmatch(r"[A-Za-z0-9_-]+", k):
+            return k
+        return '"' + k.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
     _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     sections: dict[str, dict] = {}
@@ -48,12 +56,12 @@ def _save_config_dict(data: dict) -> None:
             sections[key] = value
         else:
             escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
-            lines.append(f'{key} = "{escaped}"')
+            lines.append(f'{_toml_key(key)} = "{escaped}"')
     for section_name, section_dict in sections.items():
-        lines.append(f"\n[{section_name}]")
+        lines.append(f"\n[{_toml_key(section_name)}]")
         for k, v in section_dict.items():
             escaped = str(v).replace("\\", "\\\\").replace('"', '\\"')
-            lines.append(f'{k} = "{escaped}"')
+            lines.append(f'{_toml_key(k)} = "{escaped}"')
     _CONFIG_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -102,6 +110,48 @@ def load_price_tickers() -> dict[str, str]:
     config = _load_config_dict()
     prices = config.get("prices", {})
     return {str(k): str(v) for k, v in prices.items()}
+
+
+def load_saved_filters() -> dict[str, str]:
+    """Return saved named search filters from config.toml.
+
+    Reads the ``[filters]`` section, where each key is a display name and
+    each value is an hledger query string.
+
+    Returns:
+        A dict mapping filter name → hledger query string.
+        Returns an empty dict when no ``[filters]`` section exists.
+    """
+    config = _load_config_dict()
+    filters = config.get("filters", {})
+    return {str(k): str(v) for k, v in filters.items()}
+
+
+def save_filter(name: str, query: str) -> None:
+    """Save a named search filter to config.toml.
+
+    Args:
+        name: Display name for the filter.
+        query: hledger query string to save.
+    """
+    data = _load_config_dict()
+    if "filters" not in data:
+        data["filters"] = {}
+    data["filters"][name] = query
+    _save_config_dict(data)
+
+
+def delete_filter(name: str) -> None:
+    """Delete a named search filter from config.toml.
+
+    Args:
+        name: The filter name to remove.  No-op if the name does not exist.
+    """
+    data = _load_config_dict()
+    filters = data.get("filters", {})
+    filters.pop(name, None)
+    data["filters"] = filters
+    _save_config_dict(data)
 
 
 def load_accounts_view() -> str:
