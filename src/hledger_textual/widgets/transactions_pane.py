@@ -10,6 +10,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
 
+from hledger_textual.cache import HledgerCache
 from hledger_textual.hledger import HledgerError, load_period_summary
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
@@ -48,21 +49,29 @@ class TransactionsPane(Widget):
             show=False,
             priority=True,
         ),
+        Binding("x", "export", "Export", show=False, priority=True),
     ]
 
-    def __init__(self, journal_file: Path, **kwargs) -> None:
+    def __init__(
+        self,
+        journal_file: Path,
+        cache: HledgerCache | None = None,
+        **kwargs,
+    ) -> None:
         """Initialise the pane.
 
         Args:
             journal_file: Path to the hledger journal file.
+            cache: Optional cache for hledger results.
         """
         super().__init__(**kwargs)
         self.journal_file = journal_file
+        self._cache = cache
 
     def compose(self) -> ComposeResult:
         """Render compact summary cards and the shared transactions table."""
         yield PeriodSummaryCards(compact=True, id="txn-summary-cards")
-        yield TransactionsTable(self.journal_file)
+        yield TransactionsTable(self.journal_file, cache=self._cache)
 
     def on_mount(self) -> None:
         """Load the summary for the initial month."""
@@ -228,13 +237,71 @@ class TransactionsPane(Widget):
         else:
             period = month.strftime("%Y-%m")
         try:
-            summary = load_period_summary(self.journal_file, period)
+            summary = load_period_summary(self.journal_file, period, cache=self._cache)
         except HledgerError:
             summary = None
 
         self.app.call_from_thread(
             self.query_one(PeriodSummaryCards).update_summary, summary
         )
+
+    # ------------------------------------------------------------------
+    # Export
+    # ------------------------------------------------------------------
+
+    def action_export(self) -> None:
+        """Open the export modal with current transaction data."""
+        from hledger_textual.export import ExportData, default_filename
+        from hledger_textual.screens.export_modal import ExportModal
+
+        txns = self._table._all_transactions
+        rows = []
+        for txn in txns:
+            accounts = " · ".join(p.account for p in txn.postings)
+            rows.append([
+                txn.date,
+                txn.type_indicator,
+                txn.status.symbol,
+                txn.description,
+                accounts,
+                txn.total_amount,
+            ])
+        data = ExportData(
+            title=f"Transactions {self._table._period_label()}",
+            headers=["Date", "Type", "Status", "Description", "Accounts", "Amount"],
+            rows=rows,
+            pane_name="transactions",
+        )
+        filename = default_filename("transactions", "csv")
+
+        def on_result(result: tuple[str, str] | None) -> None:
+            if result is not None:
+                fmt, fname = result
+                self._run_export(data, fmt, fname)
+
+        self.app.push_screen(ExportModal(default_filename=filename), callback=on_result)
+
+    @work(thread=True)
+    def _run_export(self, data, fmt: str, filename: str) -> None:
+        """Execute the export in a background thread."""
+        from hledger_textual.config import load_export_dir
+        from hledger_textual.export import export_csv, export_pdf
+
+        export_dir = load_export_dir()
+        path = export_dir / filename
+
+        try:
+            if fmt == "pdf":
+                export_pdf(data, path)
+            else:
+                export_csv(data, path)
+            self.app.call_from_thread(
+                self.notify, f"Exported to {path}", timeout=5
+            )
+        except Exception as exc:
+            self.app.call_from_thread(
+                self.notify, f"Export failed: {exc}", severity="error", timeout=8
+            )
 
     # ------------------------------------------------------------------
     # Mutation helpers (add is local — only needed in the main view)

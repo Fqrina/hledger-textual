@@ -15,6 +15,7 @@ from textual.widgets import DataTable, Input, Static
 
 from hledger_textual.dateutil import next_month as _next_month
 from hledger_textual.dateutil import prev_month as _prev_month
+from hledger_textual.cache import HledgerCache
 from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets import distribute_column_widths
@@ -61,12 +62,14 @@ class TransactionsTable(Widget):
         self,
         journal_file: Path,
         fixed_query: str | None = None,
+        cache: HledgerCache | None = None,
         **kwargs,
     ) -> None:
         """Initialise the widget."""
         super().__init__(**kwargs)
         self.journal_file = journal_file
         self._fixed_query = fixed_query
+        self._cache = cache
         self._current_month: date = date.today().replace(day=1)
         self._date_query: str = "" if fixed_query else self._month_query()
         self._search_query: str = ""
@@ -415,7 +418,7 @@ class TransactionsTable(Widget):
         ]
         query = " ".join(parts) or None
         try:
-            txns = load_transactions(self.journal_file, query=query, reverse=True)
+            txns = load_transactions(self.journal_file, query=query, reverse=True, cache=self._cache)
         except HledgerError as exc:
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8

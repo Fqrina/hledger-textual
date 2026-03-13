@@ -13,6 +13,7 @@ from textual.widget import Widget
 from rich.text import Text
 from textual.widgets import DataTable, Select
 
+from hledger_textual.cache import HledgerCache
 from hledger_textual.config import load_default_commodity
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report
 from hledger_textual.models import ReportData, ReportRow
@@ -86,18 +87,21 @@ class ReportsPane(DataTablePaneMixin, Widget):
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("c", "toggle_chart", "Chart", show=False, priority=True),
         Binding("i", "toggle_investments", "Investments", show=False, priority=True),
+        Binding("x", "export", "Export", show=False, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
     ]
 
-    def __init__(self, journal_file: Path, **kwargs) -> None:
+    def __init__(self, journal_file: Path, cache: HledgerCache | None = None, **kwargs) -> None:
         """Initialize the pane.
 
         Args:
             journal_file: Path to the hledger journal file.
+            cache: Optional cache instance to avoid repeated subprocess calls.
         """
         super().__init__(**kwargs)
         self.journal_file = journal_file
+        self._cache = cache
         self._report_type: str = "is"
         self._period_months: int = 6
         self._report_data: ReportData | None = None
@@ -175,6 +179,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
                 period_begin=begin,
                 period_end=end,
                 commodity=commodity,
+                cache=self._cache,
             )
         except HledgerError as exc:
             self.app.call_from_thread(
@@ -290,6 +295,45 @@ class ReportsPane(DataTablePaneMixin, Widget):
         if event.value is not Select.BLANK:
             self._report_type = event.value
             self._load_report_data()
+
+    def get_export_data(self):
+        """Return an ExportData with report rows for export.
+
+        Returns:
+            An ExportData instance with Account and period columns.
+        """
+        from hledger_textual.export import ExportData
+
+        data = self._report_data
+        if data is None:
+            return ExportData(
+                title="Report",
+                headers=["Account"],
+                rows=[],
+                pane_name="report",
+            )
+
+        headers = ["Account"] + list(data.period_headers)
+        rows: list[list[str]] = []
+
+        for row in data.rows:
+            cells = [row.account]
+            cells.extend(row.amounts)
+            # Pad if amounts are fewer than period columns
+            while len(cells) < len(headers):
+                cells.append("")
+            rows.append(cells)
+
+        # Determine report type label
+        type_labels = {"is": "Income Statement", "bs": "Balance Sheet", "cf": "Cash Flow"}
+        type_label = type_labels.get(self._report_type, self._report_type)
+
+        return ExportData(
+            title=type_label,
+            headers=headers,
+            rows=rows,
+            pane_name="report",
+        )
 
     @on(Select.Changed, "#report-period-select")
     def on_period_range_changed(self, event: Select.Changed) -> None:

@@ -9,6 +9,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
+from hledger_textual.cache import HledgerCache
 from hledger_textual.config import load_auto_generate_recurring, load_theme
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
@@ -18,7 +19,7 @@ from hledger_textual.widgets.summary_pane import SummaryPane
 from hledger_textual.widgets.transactions_pane import TransactionsPane
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
-_FOOTER_GLOBAL = "\\[s] Sync  \\[?] Help  \\[q] Quit"
+_FOOTER_GLOBAL = "\\[x] Export  \\[s] Sync  \\[S] Cloud  \\[?] Help  \\[q] Quit"
 
 _FOOTER_COMMANDS: dict[str, str] = {
     "summary": f"\\[r] Reload  {_FOOTER_GLOBAL}",
@@ -63,6 +64,7 @@ class HledgerTuiApp(App):
         Binding("6", "switch_section('accounts')", "Accounts", show=False),
         Binding("i", "show_about", "About", show=False),
         Binding("s", "git_sync", "Sync", show=False),
+        Binding("S", "cloud_sync", "Cloud Sync", show=False),
         Binding("question_mark", "show_help", "Help", show=False),
         Binding("q", "quit", "Quit"),
     ]
@@ -75,6 +77,8 @@ class HledgerTuiApp(App):
         """
         super().__init__()
         self.journal_file = journal_file
+        self._cache = HledgerCache()
+        self._stale_panes: set[str] = set()
         saved_theme = load_theme()
         if saved_theme:
             self.theme = saved_theme
@@ -92,11 +96,11 @@ class HledgerTuiApp(App):
         )
 
         with ContentSwitcher(initial="summary", id="content-switcher"):
-            yield SummaryPane(self.journal_file, id="summary")
-            yield TransactionsPane(self.journal_file, id="transactions")
-            yield BudgetPane(self.journal_file, id="budget")
-            yield ReportsPane(self.journal_file, id="reports")
-            yield AccountsPane(self.journal_file, id="accounts")
+            yield SummaryPane(self.journal_file, cache=self._cache, id="summary")
+            yield TransactionsPane(self.journal_file, cache=self._cache, id="transactions")
+            yield BudgetPane(self.journal_file, cache=self._cache, id="budget")
+            yield ReportsPane(self.journal_file, cache=self._cache, id="reports")
+            yield AccountsPane(self.journal_file, cache=self._cache, id="accounts")
             yield RecurringPane(self.journal_file, id="recurring")
 
         yield Static(_FOOTER_COMMANDS["summary"], id="footer-bar")
@@ -186,6 +190,9 @@ class HledgerTuiApp(App):
         self.query_one("#footer-bar", Static).update(
             _FOOTER_COMMANDS.get(section, "")
         )
+        if section in self._stale_panes:
+            self._stale_panes.discard(section)
+            self._refresh_pane(section)
         self._focus_section(section)
 
     def _activate_section(self, section: str) -> None:
@@ -208,14 +215,30 @@ class HledgerTuiApp(App):
             self.query_one("#recurring-table", DataTable).focus()
 
     def _refresh_all_panes(self) -> None:
-        """Silently reload every data pane after any journal mutation."""
-        summary = self.query_one(SummaryPane)
-        summary._load_static_data()
-        summary._load_breakdown_data()
-        self.query_one(TransactionsPane).reload()
-        self.query_one(AccountsPane)._load_data()
-        self.query_one(BudgetPane)._load_budget_data()
-        self.query_one(ReportsPane)._load_report_data()
+        """Invalidate cache, refresh visible pane, mark others stale."""
+        self._cache.invalidate_all()
+        switcher = self.query_one("#content-switcher", ContentSwitcher)
+        visible = switcher.current or "summary"
+        all_sections = {"summary", "transactions", "accounts", "budget", "reports", "recurring"}
+        self._stale_panes = all_sections - {visible}
+        self._refresh_pane(visible)
+
+    def _refresh_pane(self, section: str) -> None:
+        """Refresh a single pane by name."""
+        if section == "summary":
+            pane = self.query_one(SummaryPane)
+            pane._load_static_data()
+            pane._load_breakdown_data()
+        elif section == "transactions":
+            self.query_one(TransactionsPane).reload()
+        elif section == "accounts":
+            self.query_one(AccountsPane)._load_data()
+        elif section == "budget":
+            self.query_one(BudgetPane)._load_budget_data()
+        elif section == "reports":
+            self.query_one(ReportsPane)._load_report_data()
+        elif section == "recurring":
+            self.query_one(RecurringPane)._load_data()
 
     def on_transactions_table_journal_changed(
         self, event: TransactionsTable.JournalChanged
@@ -259,6 +282,68 @@ class HledgerTuiApp(App):
                 self._run_git_sync()
 
         self.push_screen(SyncConfirmModal(), callback=on_confirm)
+
+    def action_cloud_sync(self) -> None:
+        """Show cloud sync dialog (upload / download via rclone)."""
+        from hledger_textual.cloud_sync import has_rclone, is_cloud_sync_configured
+        from hledger_textual.config import load_cloud_sync_config
+
+        config = load_cloud_sync_config()
+        if not has_rclone():
+            self.notify(
+                "rclone not found. Install it from https://rclone.org/install/",
+                severity="error",
+                timeout=8,
+            )
+            return
+
+        if not is_cloud_sync_configured(config):
+            self.notify(
+                "Cloud sync not configured. Add [cloud_sync] section to config.toml",
+                severity="warning",
+                timeout=8,
+            )
+            return
+
+        from hledger_textual.screens.cloud_sync_confirm import CloudSyncConfirmModal
+
+        def on_result(action: str | None) -> None:
+            if action is not None:
+                self._run_cloud_sync(action, config)
+
+        self.push_screen(CloudSyncConfirmModal(), callback=on_result)
+
+    @work(thread=True, exclusive=True, group="cloud-sync")
+    def _run_cloud_sync(self, action: str, config: dict) -> None:
+        """Execute cloud sync in a background thread.
+
+        Args:
+            action: Either "upload" or "download".
+            config: Cloud sync config dict.
+        """
+        from hledger_textual.cloud_sync import (
+            CloudSyncError,
+            cloud_sync_download,
+            cloud_sync_upload,
+        )
+
+        self.app.call_from_thread(
+            self.notify, f"Cloud sync: {action}ing...", severity="information"
+        )
+        try:
+            if action == "upload":
+                result = cloud_sync_upload(self.journal_file, config)
+            else:
+                result = cloud_sync_download(self.journal_file, config)
+            self.app.call_from_thread(
+                self.notify, result, severity="information"
+            )
+            if action == "download":
+                self.app.call_from_thread(self._refresh_all_panes)
+        except CloudSyncError as exc:
+            self.app.call_from_thread(
+                self.notify, str(exc), severity="error", timeout=8
+            )
 
     @work(thread=True, exclusive=True, group="git-sync")
     def _run_git_sync(self) -> None:

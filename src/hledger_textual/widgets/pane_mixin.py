@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from textual import work
 from textual.widgets import DataTable
 
 from hledger_textual.widgets import distribute_column_widths
 
 
 class DataTablePaneMixin:
-    """Mixin providing on_show, on_resize, and cursor navigation for DataTable panes.
+    """Mixin providing on_show, on_resize, cursor navigation, and export for DataTable panes.
 
     Subclasses must set ``_main_table_id`` (the CSS id of their DataTable)
     and ``_fixed_column_widths`` (a dict of column-index to fixed width).
+
+    To support export, subclasses should override ``get_export_data()``.
     """
 
     _main_table_id: str
@@ -36,3 +39,61 @@ class DataTablePaneMixin:
     def action_cursor_up(self) -> None:
         """Move cursor up in the table."""
         self._get_main_table().action_cursor_up()
+
+    def get_export_data(self):
+        """Return an :class:`ExportData` for the currently visible table data.
+
+        Subclasses should override this to provide pane-specific export content.
+
+        Returns:
+            An ExportData instance, or None if export is not supported.
+        """
+        return None
+
+    def action_export(self) -> None:
+        """Open the export modal and export visible data to CSV or PDF."""
+        from hledger_textual.export import ExportData, default_filename
+
+        data = self.get_export_data()
+        if data is None:
+            self.notify("Export not available for this pane", severity="warning", timeout=3)
+            return
+
+        from hledger_textual.screens.export_modal import ExportModal
+
+        filename = default_filename(data.pane_name, "csv")
+
+        def on_result(result: tuple[str, str] | None) -> None:
+            if result is not None:
+                fmt, fname = result
+                self._run_export(data, fmt, fname)
+
+        self.app.push_screen(ExportModal(default_filename=filename), callback=on_result)
+
+    @work(thread=True)
+    def _run_export(self, data, fmt: str, filename: str) -> None:
+        """Execute the export in a background thread.
+
+        Args:
+            data: The ExportData to export.
+            fmt: Export format ("csv" or "pdf").
+            filename: The target filename.
+        """
+        from hledger_textual.config import load_export_dir
+        from hledger_textual.export import export_csv, export_pdf
+
+        export_dir = load_export_dir()
+        path = export_dir / filename
+
+        try:
+            if fmt == "pdf":
+                export_pdf(data, path)
+            else:
+                export_csv(data, path)
+            self.app.call_from_thread(
+                self.notify, f"Exported to {path}", timeout=5
+            )
+        except Exception as exc:
+            self.app.call_from_thread(
+                self.notify, f"Export failed: {exc}", severity="error", timeout=8
+            )

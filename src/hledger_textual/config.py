@@ -192,6 +192,48 @@ def load_auto_generate_recurring() -> bool:
     return False
 
 
+def load_export_dir() -> Path:
+    """Return the configured export directory, or the default.
+
+    Reads the ``[export] dir`` key from config.toml.  Falls back to
+    ``~/Documents/hledger-exports/``.
+
+    Returns:
+        Resolved path to the export directory.
+    """
+    config = _load_config_dict()
+    export = config.get("export", {})
+    dir_str = export.get("dir", "") if isinstance(export, dict) else ""
+    if dir_str:
+        return Path(dir_str).expanduser().resolve()
+    return Path.home() / "Documents" / "hledger-exports"
+
+
+def load_cloud_sync_config() -> dict | None:
+    """Return cloud sync configuration, or None if not configured.
+
+    Reads the ``[cloud_sync]`` section from config.toml::
+
+        [cloud_sync]
+        remote = "gdrive"
+        path = "hledger-backup"
+
+    Returns:
+        A dict with 'remote' and 'path' keys, or None if the section
+        is missing or incomplete.
+    """
+    config = _load_config_dict()
+    cloud = config.get("cloud_sync", {})
+    if not isinstance(cloud, dict):
+        return None
+    if cloud.get("remote") and cloud.get("path"):
+        return {
+            "remote": str(cloud["remote"]),
+            "path": str(cloud["path"]),
+        }
+    return None
+
+
 def _load_config_toml() -> str | None:
     """Load journal_file from config.toml if it exists.
 

@@ -23,6 +23,7 @@ from hledger_textual.budget import (
     parse_budget_rules,
     update_budget_rule,
 )
+from hledger_textual.cache import HledgerCache
 from hledger_textual.hledger import HledgerError, load_budget_report
 from hledger_textual.models import BudgetRow, BudgetRule
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
@@ -42,6 +43,7 @@ class BudgetPane(DataTablePaneMixin, Widget):
         Binding("d", "delete", "Delete", show=True, priority=True),
         Binding("slash", "filter", "Filter", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
+        Binding("x", "export", "Export", show=False, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("left,h", "prev_month", "Prev month", show=False, priority=True),
         Binding("right,l", "next_month", "Next month", show=False, priority=True),
@@ -50,14 +52,16 @@ class BudgetPane(DataTablePaneMixin, Widget):
         Binding("k", "cursor_up", "Up", show=False),
     ]
 
-    def __init__(self, journal_file: Path, **kwargs) -> None:
+    def __init__(self, journal_file: Path, cache: HledgerCache | None = None, **kwargs) -> None:
         """Initialize the pane.
 
         Args:
             journal_file: Path to the hledger journal file.
+            cache: Optional cache instance to avoid repeated subprocess calls.
         """
         super().__init__(**kwargs)
         self.journal_file = journal_file
+        self._cache = cache
         self._budget_path: Path | None = None
         self._rules: list[BudgetRule] = []
         self._budget_rows: list[BudgetRow] = []
@@ -115,7 +119,7 @@ class BudgetPane(DataTablePaneMixin, Widget):
 
         try:
             self._budget_rows = load_budget_report(
-                self.journal_file, self._period_string()
+                self.journal_file, self._period_string(), cache=self._cache
             )
         except HledgerError:
             self._budget_rows = []
@@ -339,6 +343,49 @@ class BudgetPane(DataTablePaneMixin, Widget):
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8
             )
+
+    def get_export_data(self):
+        """Return an ExportData with budget rows for export.
+
+        Returns:
+            An ExportData instance with Account, Budget, Actual, Remaining,
+            and % Used columns.
+        """
+        from hledger_textual.export import ExportData
+
+        headers = ["Account", "Budget", "Actual", "Remaining", "% Used"]
+        rows: list[list[str]] = []
+
+        actuals: dict[str, BudgetRow] = {
+            row.account: row for row in self._budget_rows
+        }
+
+        for rule in self._rules:
+            if self.filter_text and self.filter_text.lower() not in rule.account.lower():
+                continue
+
+            budget_amount = rule.amount.quantity
+            commodity = rule.amount.commodity
+            report_row = actuals.get(rule.account)
+
+            actual_amount = report_row.actual if report_row else 0
+            remaining = budget_amount - actual_amount
+            usage = float(actual_amount / budget_amount * 100) if budget_amount else 0.0
+
+            rows.append([
+                rule.account,
+                f"{commodity}{budget_amount:.2f}",
+                f"{commodity}{actual_amount:.2f}",
+                f"{commodity}{remaining:.2f}",
+                f"{usage:.0f}%",
+            ])
+
+        return ExportData(
+            title=f"Budget {self._period_label()}",
+            headers=headers,
+            rows=rows,
+            pane_name="budget",
+        )
 
     def _reload(self) -> None:
         """Reload budget data after a mutation."""

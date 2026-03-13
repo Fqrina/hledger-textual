@@ -13,6 +13,7 @@ from rich.text import Text
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable, Input
 
+from hledger_textual.cache import HledgerCache
 from hledger_textual.config import load_accounts_view, save_accounts_view
 from hledger_textual.hledger import (
     HledgerError,
@@ -41,19 +42,22 @@ class AccountsPane(DataTablePaneMixin, Widget):
         Binding("t", "toggle_view", "Flat/Tree", show=True, priority=True),
         Binding("slash", "filter", "Filter", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
+        Binding("x", "export", "Export", show=False, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
     ]
 
-    def __init__(self, journal_file: Path, **kwargs) -> None:
+    def __init__(self, journal_file: Path, cache: HledgerCache | None = None, **kwargs) -> None:
         """Initialize the pane.
 
         Args:
             journal_file: Path to the hledger journal file.
+            cache: Optional cache instance to avoid repeated subprocess calls.
         """
         super().__init__(**kwargs)
         self.journal_file = journal_file
+        self._cache = cache
         self._balances: list[tuple[str, str]] = []
         self._tree_roots: list[AccountNode] = []
         self._tree_mode: bool = load_accounts_view() == "tree"
@@ -81,7 +85,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
     def _load_data(self) -> None:
         """Load account data from hledger for both views."""
         try:
-            self._balances = load_account_balances(self.journal_file)
+            self._balances = load_account_balances(self.journal_file, cache=self._cache)
         except HledgerError as exc:
             self.notify(str(exc), severity="error", timeout=8)
             self._balances = []
@@ -339,6 +343,27 @@ class AccountsPane(DataTablePaneMixin, Widget):
             self.query_one("#accounts-table", DataTable).focus()
 
     # --- Event handlers ---
+
+    def get_export_data(self):
+        """Return an ExportData with filtered account balances for export.
+
+        Returns:
+            An ExportData instance with Account and Balance columns.
+        """
+        from hledger_textual.export import ExportData
+
+        headers = ["Account", "Balance"]
+        rows: list[list[str]] = []
+
+        for account, balance in self._filtered_balances():
+            rows.append([account, balance])
+
+        return ExportData(
+            title="Accounts",
+            headers=headers,
+            rows=rows,
+            pane_name="accounts",
+        )
 
     @on(Input.Changed, "#acc-filter-input")
     def on_filter_changed(self, event: Input.Changed) -> None:
