@@ -12,7 +12,6 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widget import Widget
 from rich.text import Text
-from textual.coordinate import Coordinate
 from textual.widgets import DataTable, Static
 
 from hledger_textual.cache import HledgerCache
@@ -68,7 +67,6 @@ class SummaryPane(Widget):
 
     BINDINGS = [
         Binding("r", "refresh", "Refresh", show=True, priority=True),
-        Binding("x", "export", "Export", show=False, priority=True),
     ]
 
     def __init__(
@@ -213,64 +211,6 @@ class SummaryPane(Widget):
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
-
-    def action_export(self) -> None:
-        """Export the expense breakdown table to CSV or PDF."""
-        from hledger_textual.config import load_export_dir
-        from hledger_textual.export import ExportData, default_filename
-        from hledger_textual.screens.export_modal import ExportModal
-
-        table = self.query_one("#summary-breakdown-table", DataTable)
-        rows = []
-        for row_idx in range(table.row_count):
-            row_cells = []
-            for col_idx in range(len(table.columns)):
-                val = table.get_cell_at(Coordinate(row_idx, col_idx))
-                row_cells.append(str(val) if val else "")
-            rows.append(row_cells)
-
-        data = ExportData(
-            title=f"Summary {self._current_month.strftime('%B %Y')}",
-            headers=["Account", "Amount", "% of total"],
-            rows=rows,
-            pane_name="summary",
-        )
-        filename = default_filename("summary", "csv")
-        export_dir = str(load_export_dir())
-
-        def on_result(result: tuple[str, str, str] | None) -> None:
-            if result is not None:
-                fmt, fname, directory = result
-                self._run_export(data, fmt, fname, directory)
-
-        self.app.push_screen(
-            ExportModal(default_filename=filename, default_directory=export_dir),
-            callback=on_result,
-        )
-
-    @work(thread=True)
-    def _run_export(self, data, fmt: str, filename: str, directory: str) -> None:
-        """Execute the export in a background thread."""
-        from pathlib import Path
-
-        from hledger_textual.export import export_csv, export_pdf
-
-        export_dir = Path(directory).expanduser().resolve()
-        export_dir.mkdir(parents=True, exist_ok=True)
-        path = export_dir / filename
-
-        try:
-            if fmt == "pdf":
-                export_pdf(data, path)
-            else:
-                export_csv(data, path)
-            self.app.call_from_thread(
-                self.notify, f"Exported to {path}", timeout=5
-            )
-        except Exception as exc:
-            self.app.call_from_thread(
-                self.notify, f"Export failed: {exc}", severity="error", timeout=8
-            )
 
     def action_refresh(self) -> None:
         """Reload all summary data."""

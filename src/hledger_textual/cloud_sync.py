@@ -64,7 +64,7 @@ def is_cloud_sync_configured(config: dict | None) -> bool:
     """Check whether cloud sync is configured.
 
     Args:
-        config: The cloud_sync config dict (from load_cloud_sync_config).
+        config: The cloud_sync config dict with 'remote' and 'path' keys.
 
     Returns:
         True if the config contains the required remote and path keys.

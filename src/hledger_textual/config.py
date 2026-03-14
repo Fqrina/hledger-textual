@@ -209,29 +209,32 @@ def load_export_dir() -> Path:
     return Path.home() / "Documents" / "hledger-exports"
 
 
-def load_cloud_sync_config() -> dict | None:
-    """Return cloud sync configuration, or None if not configured.
+def load_sync_config() -> dict | None:
+    """Return sync configuration, or None if sync is disabled.
 
-    Reads the ``[cloud_sync]`` section from config.toml::
+    Reads the ``[sync]`` section from config.toml::
 
-        [cloud_sync]
+        [sync]
+        enabled = "true"
+        method = "git"           # "git" or "rclone"
+        # rclone-specific:
         remote = "gdrive"
         path = "hledger-backup"
 
     Returns:
-        A dict with 'remote' and 'path' keys, or None if the section
-        is missing or incomplete.
+        A dict with at least ``enabled`` and ``method`` keys, or ``None``
+        when the section is absent or ``enabled`` is not ``"true"``.
     """
     config = _load_config_dict()
-    cloud = config.get("cloud_sync", {})
-    if not isinstance(cloud, dict):
+    sync = config.get("sync", {})
+    if not isinstance(sync, dict):
         return None
-    if cloud.get("remote") and cloud.get("path"):
-        return {
-            "remote": str(cloud["remote"]),
-            "path": str(cloud["path"]),
-        }
-    return None
+    enabled = sync.get("enabled", False)
+    if isinstance(enabled, str):
+        enabled = enabled.lower() in ("true", "1", "yes")
+    if not enabled:
+        return None
+    return {k: str(v) for k, v in sync.items()}
 
 
 def _load_config_toml() -> str | None:
