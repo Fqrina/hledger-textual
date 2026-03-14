@@ -216,6 +216,7 @@ class SummaryPane(Widget):
 
     def action_export(self) -> None:
         """Export the expense breakdown table to CSV or PDF."""
+        from hledger_textual.config import load_export_dir
         from hledger_textual.export import ExportData, default_filename
         from hledger_textual.screens.export_modal import ExportModal
 
@@ -235,21 +236,27 @@ class SummaryPane(Widget):
             pane_name="summary",
         )
         filename = default_filename("summary", "csv")
+        export_dir = str(load_export_dir())
 
-        def on_result(result: tuple[str, str] | None) -> None:
+        def on_result(result: tuple[str, str, str] | None) -> None:
             if result is not None:
-                fmt, fname = result
-                self._run_export(data, fmt, fname)
+                fmt, fname, directory = result
+                self._run_export(data, fmt, fname, directory)
 
-        self.app.push_screen(ExportModal(default_filename=filename), callback=on_result)
+        self.app.push_screen(
+            ExportModal(default_filename=filename, default_directory=export_dir),
+            callback=on_result,
+        )
 
     @work(thread=True)
-    def _run_export(self, data, fmt: str, filename: str) -> None:
+    def _run_export(self, data, fmt: str, filename: str, directory: str) -> None:
         """Execute the export in a background thread."""
-        from hledger_textual.config import load_export_dir
+        from pathlib import Path
+
         from hledger_textual.export import export_csv, export_pdf
 
-        export_dir = load_export_dir()
+        export_dir = Path(directory).expanduser().resolve()
+        export_dir.mkdir(parents=True, exist_ok=True)
         path = export_dir / filename
 
         try:

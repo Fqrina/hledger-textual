@@ -8,24 +8,31 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, RadioButton, RadioSet
 
 
-class ExportModal(ModalScreen[tuple[str, str] | None]):
-    """Modal for choosing export format (CSV/PDF) and filename.
+class ExportModal(ModalScreen[tuple[str, str, str] | None]):
+    """Modal for choosing export format (CSV/PDF), filename, and directory.
 
-    Returns a ``(format, filename)`` tuple on confirm, or ``None`` on cancel.
+    Returns a ``(format, filename, directory)`` tuple on confirm, or ``None``
+    on cancel.
     """
 
     BINDINGS = [
         ("escape", "cancel", "Cancel"),
     ]
 
-    def __init__(self, default_filename: str = "export.csv") -> None:
+    def __init__(
+        self,
+        default_filename: str = "export.csv",
+        default_directory: str = "",
+    ) -> None:
         """Initialize the modal.
 
         Args:
             default_filename: Pre-filled filename suggestion.
+            default_directory: Pre-filled export directory path.
         """
         super().__init__()
         self._default_filename = default_filename
+        self._default_directory = default_directory
 
     def compose(self) -> ComposeResult:
         """Create the modal layout."""
@@ -35,6 +42,11 @@ class ExportModal(ModalScreen[tuple[str, str] | None]):
             with RadioSet(id="export-format"):
                 yield RadioButton("CSV", value=True, id="radio-csv")
                 yield RadioButton("PDF", id="radio-pdf")
+            yield Label("Directory:", id="export-dir-label")
+            yield Input(
+                value=self._default_directory,
+                id="export-dir-input",
+            )
             yield Label("Filename:", id="export-filename-label")
             yield Input(
                 value=self._default_filename,
@@ -60,10 +72,13 @@ class ExportModal(ModalScreen[tuple[str, str] | None]):
         if event.button.id == "btn-export":
             fmt = "pdf" if self.query_one("#radio-pdf", RadioButton).value else "csv"
             filename = self.query_one("#export-filename-input", Input).value.strip()
-            if filename:
-                self.dismiss((fmt, filename))
-            else:
+            directory = self.query_one("#export-dir-input", Input).value.strip()
+            if not filename:
                 self.notify("Please enter a filename", severity="warning", timeout=3)
+            elif not directory:
+                self.notify("Please enter a directory", severity="warning", timeout=3)
+            else:
+                self.dismiss((fmt, filename, directory))
         else:
             self.dismiss(None)
 

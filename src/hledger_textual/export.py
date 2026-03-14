@@ -90,27 +90,82 @@ def export_pdf(data: ExportData, path: Path) -> None:
     pdf.cell(0, 10, data.title, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
 
-    # Calculate column widths based on available page width
+    # Calculate column widths proportional to content
     page_width = pdf.w - pdf.l_margin - pdf.r_margin
     n_cols = len(data.headers)
-    col_width = page_width / n_cols if n_cols else page_width
+    if n_cols == 0:
+        pdf.output(str(path))
+        return
+
+    col_widths = _compute_col_widths(pdf, data, page_width)
 
     # Header row
     pdf.set_font("Helvetica", "B", 9)
-    for header in data.headers:
-        pdf.cell(col_width, 7, header, border=1)
+    for i, header in enumerate(data.headers):
+        pdf.cell(col_widths[i], 7, header, border=1)
     pdf.ln()
 
     # Data rows
     pdf.set_font("Helvetica", size=8)
     for row in data.rows:
         for i, cell in enumerate(row):
-            # Strip any Rich markup
             clean = _strip_markup(cell)
-            pdf.cell(col_width, 6, clean, border=0)
+            pdf.cell(col_widths[i], 6, clean, border=0)
         pdf.ln()
 
     pdf.output(str(path))
+
+
+def _compute_col_widths(pdf, data: ExportData, page_width: float) -> list[float]:
+    """Compute proportional column widths based on content.
+
+    Measures the maximum text width per column (header + data rows) and
+    distributes the available page width proportionally, with a minimum
+    width so that even single-character columns remain readable.
+
+    Args:
+        pdf: The FPDF instance (used for string width measurement).
+        data: The export data with headers and rows.
+        page_width: Available width in mm.
+
+    Returns:
+        List of column widths in mm.
+    """
+    n_cols = len(data.headers)
+    min_col_width = 8.0  # mm — enough for a single character + padding
+
+    # Measure max content width per column using the data font
+    pdf.set_font("Helvetica", size=8)
+    max_widths: list[float] = []
+    for col_idx in range(n_cols):
+        header_w = pdf.get_string_width(data.headers[col_idx]) + 4
+        best = header_w
+        for row in data.rows:
+            if col_idx < len(row):
+                cell_w = pdf.get_string_width(_strip_markup(row[col_idx])) + 4
+                if cell_w > best:
+                    best = cell_w
+        max_widths.append(max(best, min_col_width))
+
+    # Scale proportionally to fit page width
+    total = sum(max_widths)
+    if total <= 0:
+        return [page_width / n_cols] * n_cols
+
+    col_widths = [w / total * page_width for w in max_widths]
+
+    # Enforce minimum width, redistribute excess from oversized columns
+    for i in range(n_cols):
+        if col_widths[i] < min_col_width:
+            col_widths[i] = min_col_width
+
+    # Re-normalize to exactly fill page width
+    current_total = sum(col_widths)
+    if current_total > 0:
+        factor = page_width / current_total
+        col_widths = [w * factor for w in col_widths]
+
+    return col_widths
 
 
 def _strip_markup(text: str) -> str:

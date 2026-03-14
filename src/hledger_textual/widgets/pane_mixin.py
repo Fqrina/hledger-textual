@@ -52,6 +52,7 @@ class DataTablePaneMixin:
 
     def action_export(self) -> None:
         """Open the export modal and export visible data to CSV or PDF."""
+        from hledger_textual.config import load_export_dir
         from hledger_textual.export import ExportData, default_filename
 
         data = self.get_export_data()
@@ -62,27 +63,34 @@ class DataTablePaneMixin:
         from hledger_textual.screens.export_modal import ExportModal
 
         filename = default_filename(data.pane_name, "csv")
+        export_dir = str(load_export_dir())
 
-        def on_result(result: tuple[str, str] | None) -> None:
+        def on_result(result: tuple[str, str, str] | None) -> None:
             if result is not None:
-                fmt, fname = result
-                self._run_export(data, fmt, fname)
+                fmt, fname, directory = result
+                self._run_export(data, fmt, fname, directory)
 
-        self.app.push_screen(ExportModal(default_filename=filename), callback=on_result)
+        self.app.push_screen(
+            ExportModal(default_filename=filename, default_directory=export_dir),
+            callback=on_result,
+        )
 
     @work(thread=True)
-    def _run_export(self, data, fmt: str, filename: str) -> None:
+    def _run_export(self, data, fmt: str, filename: str, directory: str) -> None:
         """Execute the export in a background thread.
 
         Args:
             data: The ExportData to export.
             fmt: Export format ("csv" or "pdf").
             filename: The target filename.
+            directory: The target directory path.
         """
-        from hledger_textual.config import load_export_dir
+        from pathlib import Path
+
         from hledger_textual.export import export_csv, export_pdf
 
-        export_dir = load_export_dir()
+        export_dir = Path(directory).expanduser().resolve()
+        export_dir.mkdir(parents=True, exist_ok=True)
         path = export_dir / filename
 
         try:
