@@ -9,7 +9,9 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
-from hledger_textual.config import load_auto_generate_recurring, load_theme
+from hledger_textual.cache import HledgerCache
+from hledger_textual.config import load_auto_generate_recurring, load_sync_config, load_theme
+from hledger_textual.sync import SyncBackend, SyncError, create_sync_backend
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
 from hledger_textual.widgets.recurring_pane import RecurringPane
@@ -18,16 +20,27 @@ from hledger_textual.widgets.summary_pane import SummaryPane
 from hledger_textual.widgets.transactions_pane import TransactionsPane
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
-_FOOTER_GLOBAL = "\\[s] Sync  \\[?] Help  \\[q] Quit"
 
-_FOOTER_COMMANDS: dict[str, str] = {
-    "summary": f"\\[r] Reload  {_FOOTER_GLOBAL}",
-    "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {_FOOTER_GLOBAL}",
-    "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {_FOOTER_GLOBAL}",
-    "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  {_FOOTER_GLOBAL}",
-    "reports": f"\\[c] Chart  \\[i] Inv  \\[r] Reload  {_FOOTER_GLOBAL}",
-    "recurring": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[g] Generate  \\[r] Reload  {_FOOTER_GLOBAL}",
-}
+def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
+    """Build the footer command strings.
+
+    Args:
+        sync_enabled: Whether the sync shortcut should be shown.
+
+    Returns:
+        A dict mapping section name to footer text.
+    """
+    sync_part = "\\[s] Sync  " if sync_enabled else ""
+    global_part = f"\\[x] Export  {sync_part}\\[?] Help  \\[q] Quit"
+    global_no_export = f"{sync_part}\\[?] Help  \\[q] Quit"
+    return {
+        "summary": f"\\[r] Reload  {global_no_export}",
+        "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {global_part}",
+        "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {global_part}",
+        "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  {global_part}",
+        "reports": f"\\[c] Chart  \\[i] Inv  \\[r] Reload  {global_part}",
+        "recurring": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[g] Generate  \\[r] Reload  {global_part}",
+    }
 
 
 class _NavTab(Tab):
@@ -62,7 +75,7 @@ class HledgerTuiApp(App):
         Binding("5", "switch_section('reports')", "Reports", show=False),
         Binding("6", "switch_section('accounts')", "Accounts", show=False),
         Binding("i", "show_about", "About", show=False),
-        Binding("s", "git_sync", "Sync", show=False),
+        Binding("s", "sync", "Sync", show=False),
         Binding("question_mark", "show_help", "Help", show=False),
         Binding("q", "quit", "Quit"),
     ]
@@ -75,6 +88,19 @@ class HledgerTuiApp(App):
         """
         super().__init__()
         self.journal_file = journal_file
+        self._cache = HledgerCache()
+        self._stale_panes: set[str] = set()
+        self._sync_backend: SyncBackend | None = None
+        sync_config = load_sync_config()
+        if sync_config:
+            method = sync_config.get("method", "git")
+            try:
+                self._sync_backend = create_sync_backend(
+                    method, journal_file, sync_config
+                )
+            except SyncError:
+                pass
+        self._footer_commands = _build_footer_commands(self._sync_backend is not None)
         saved_theme = load_theme()
         if saved_theme:
             self.theme = saved_theme
@@ -92,14 +118,14 @@ class HledgerTuiApp(App):
         )
 
         with ContentSwitcher(initial="summary", id="content-switcher"):
-            yield SummaryPane(self.journal_file, id="summary")
-            yield TransactionsPane(self.journal_file, id="transactions")
-            yield BudgetPane(self.journal_file, id="budget")
-            yield ReportsPane(self.journal_file, id="reports")
-            yield AccountsPane(self.journal_file, id="accounts")
+            yield SummaryPane(self.journal_file, cache=self._cache, id="summary")
+            yield TransactionsPane(self.journal_file, cache=self._cache, id="transactions")
+            yield BudgetPane(self.journal_file, cache=self._cache, id="budget")
+            yield ReportsPane(self.journal_file, cache=self._cache, id="reports")
+            yield AccountsPane(self.journal_file, cache=self._cache, id="accounts")
             yield RecurringPane(self.journal_file, id="recurring")
 
-        yield Static(_FOOTER_COMMANDS["summary"], id="footer-bar")
+        yield Static(self._footer_commands["summary"], id="footer-bar")
 
     def on_mount(self) -> None:
         """Focus the default section after mount."""
@@ -184,8 +210,11 @@ class HledgerTuiApp(App):
         section = event.tab.id.removeprefix("tab-")
         self.query_one("#content-switcher", ContentSwitcher).current = section
         self.query_one("#footer-bar", Static).update(
-            _FOOTER_COMMANDS.get(section, "")
+            self._footer_commands.get(section, "")
         )
+        if section in self._stale_panes:
+            self._stale_panes.discard(section)
+            self._refresh_pane(section)
         self._focus_section(section)
 
     def _activate_section(self, section: str) -> None:
@@ -208,14 +237,30 @@ class HledgerTuiApp(App):
             self.query_one("#recurring-table", DataTable).focus()
 
     def _refresh_all_panes(self) -> None:
-        """Silently reload every data pane after any journal mutation."""
-        summary = self.query_one(SummaryPane)
-        summary._load_static_data()
-        summary._load_breakdown_data()
-        self.query_one(TransactionsPane).reload()
-        self.query_one(AccountsPane)._load_data()
-        self.query_one(BudgetPane)._load_budget_data()
-        self.query_one(ReportsPane)._load_report_data()
+        """Invalidate cache, refresh visible pane, mark others stale."""
+        self._cache.invalidate_all()
+        switcher = self.query_one("#content-switcher", ContentSwitcher)
+        visible = switcher.current or "summary"
+        all_sections = {"summary", "transactions", "accounts", "budget", "reports", "recurring"}
+        self._stale_panes = all_sections - {visible}
+        self._refresh_pane(visible)
+
+    def _refresh_pane(self, section: str) -> None:
+        """Refresh a single pane by name."""
+        if section == "summary":
+            pane = self.query_one(SummaryPane)
+            pane._load_static_data()
+            pane._load_breakdown_data()
+        elif section == "transactions":
+            self.query_one(TransactionsPane).reload()
+        elif section == "accounts":
+            self.query_one(AccountsPane)._load_data()
+        elif section == "budget":
+            self.query_one(BudgetPane)._load_budget_data()
+        elif section == "reports":
+            self.query_one(ReportsPane)._load_report_data()
+        elif section == "recurring":
+            self.query_one(RecurringPane)._load_data()
 
     def on_transactions_table_journal_changed(
         self, event: TransactionsTable.JournalChanged
@@ -245,35 +290,56 @@ class HledgerTuiApp(App):
 
         self.push_screen(HelpScreen())
 
-    def action_git_sync(self) -> None:
-        """Show confirmation dialog, then commit + pull + push via git."""
-        from hledger_textual.git import is_git_repo
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """Disable the sync action when no backend is configured."""
+        if action == "sync":
+            return self._sync_backend is not None
+        return True
+
+    def action_sync(self) -> None:
+        """Show sync confirmation dialog, then run the configured backend."""
         from hledger_textual.screens.sync_confirm import SyncConfirmModal
 
-        if not is_git_repo(self.journal_file):
-            self.notify("Not a git repository", severity="warning")
+        backend = self._sync_backend
+        if backend is None:
             return
 
-        def on_confirm(confirmed: bool | None) -> None:
-            if confirmed:
-                self._run_git_sync()
+        if not backend.is_available():
+            self.notify(
+                f"{backend.name} is not available",
+                severity="error",
+                timeout=8,
+            )
+            return
 
-        self.push_screen(SyncConfirmModal(), callback=on_confirm)
+        def on_result(action: str | None) -> None:
+            if action is not None:
+                self._run_sync(action)
 
-    @work(thread=True, exclusive=True, group="git-sync")
-    def _run_git_sync(self) -> None:
-        """Execute the git sync in a background thread."""
-        from hledger_textual.git import GitError, git_sync
+        self.push_screen(SyncConfirmModal(backend), callback=on_result)
+
+    @work(thread=True, exclusive=True, group="sync")
+    def _run_sync(self, action: str) -> None:
+        """Execute the sync action in a background thread.
+
+        Args:
+            action: The action name from the backend.
+        """
+        backend = self._sync_backend
+        if backend is None:
+            return
 
         self.app.call_from_thread(
-            self.notify, "Syncing...", severity="information"
+            self.notify, f"Syncing ({backend.name})...", severity="information"
         )
         try:
-            result = git_sync(self.journal_file)
+            result = backend.run(action, self.journal_file)
             self.app.call_from_thread(
                 self.notify, result, severity="information"
             )
-        except GitError as exc:
+            if action == "download":
+                self.app.call_from_thread(self._refresh_all_panes)
+        except SyncError as exc:
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error"
+                self.notify, str(exc), severity="error", timeout=8
             )

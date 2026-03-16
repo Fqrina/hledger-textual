@@ -14,6 +14,7 @@ from textual.widget import Widget
 from rich.text import Text
 from textual.widgets import DataTable, Static
 
+from hledger_textual.cache import HledgerCache
 from hledger_textual.config import load_price_tickers
 from hledger_textual.formatter import normalize_commodity
 from hledger_textual.widgets import distribute_column_widths
@@ -68,14 +69,21 @@ class SummaryPane(Widget):
         Binding("r", "refresh", "Refresh", show=True, priority=True),
     ]
 
-    def __init__(self, journal_file: Path, **kwargs) -> None:
+    def __init__(
+        self,
+        journal_file: Path,
+        cache: HledgerCache | None = None,
+        **kwargs,
+    ) -> None:
         """Initialize the summary pane.
 
         Args:
             journal_file: Path to the hledger journal file.
+            cache: Optional cache for hledger results.
         """
         super().__init__(**kwargs)
         self.journal_file = journal_file
+        self._cache = cache
         self._current_month: date = date.today().replace(day=1)
 
     # ------------------------------------------------------------------
@@ -222,7 +230,7 @@ class SummaryPane(Widget):
         """
         # --- All-time period summary for cards ---
         try:
-            summary = load_period_summary(self.journal_file)
+            summary = load_period_summary(self.journal_file, cache=self._cache)
         except HledgerError:
             summary = None
 

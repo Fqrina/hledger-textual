@@ -39,6 +39,7 @@ class RecurringPane(DataTablePaneMixin, Widget):
         Binding("d", "delete", "Delete", show=True, priority=True),
         Binding("g", "generate", "Generate", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
+        Binding("x", "export", "Export", show=False, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
     ]
@@ -279,3 +280,34 @@ class RecurringPane(DataTablePaneMixin, Widget):
             self.notify, f"Generated {total} transaction(s)", timeout=3
         )
         self.app.call_from_thread(self.post_message, self.JournalChanged())
+
+    def get_export_data(self):
+        """Return an ExportData with recurring rule rows for export.
+
+        Returns:
+            An ExportData instance with Period, Description, Start, End,
+            and Postings columns.
+        """
+        from hledger_textual.export import ExportData
+
+        headers = ["Period", "Description", "Start", "End", "Postings"]
+        rows: list[list[str]] = []
+
+        for rule in self._rules:
+            postings_summary = ", ".join(
+                p.account for p in rule.postings if p.account
+            )
+            rows.append([
+                rule.period_expr,
+                rule.description,
+                rule.start_date or "",
+                rule.end_date or "",
+                postings_summary,
+            ])
+
+        return ExportData(
+            title="Recurring Rules",
+            headers=headers,
+            rows=rows,
+            pane_name="recurring",
+        )

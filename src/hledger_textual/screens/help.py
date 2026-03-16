@@ -20,8 +20,9 @@ def _build_help_text() -> str:
             "Global",
             [
                 ("1-6", "Switch tab"),
+                ("x", "Export (CSV/PDF)"),
                 ("i", "About"),
-                ("s", "Git Sync"),
+                ("s", "Sync (if enabled)"),
                 ("?", "This help"),
                 ("q", "Quit"),
             ],

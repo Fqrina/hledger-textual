@@ -192,6 +192,51 @@ def load_auto_generate_recurring() -> bool:
     return False
 
 
+def load_export_dir() -> Path:
+    """Return the configured export directory, or the default.
+
+    Reads the ``[export] dir`` key from config.toml.  Falls back to
+    ``~/Documents/hledger-exports/``.
+
+    Returns:
+        Resolved path to the export directory.
+    """
+    config = _load_config_dict()
+    export = config.get("export", {})
+    dir_str = export.get("dir", "") if isinstance(export, dict) else ""
+    if dir_str:
+        return Path(dir_str).expanduser().resolve()
+    return Path.home() / "Documents" / "hledger-exports"
+
+
+def load_sync_config() -> dict | None:
+    """Return sync configuration, or None if sync is disabled.
+
+    Reads the ``[sync]`` section from config.toml::
+
+        [sync]
+        enabled = "true"
+        method = "git"           # "git" or "rclone"
+        # rclone-specific:
+        remote = "gdrive"
+        path = "hledger-backup"
+
+    Returns:
+        A dict with at least ``enabled`` and ``method`` keys, or ``None``
+        when the section is absent or ``enabled`` is not ``"true"``.
+    """
+    config = _load_config_dict()
+    sync = config.get("sync", {})
+    if not isinstance(sync, dict):
+        return None
+    enabled = sync.get("enabled", False)
+    if isinstance(enabled, str):
+        enabled = enabled.lower() in ("true", "1", "yes")
+    if not enabled:
+        return None
+    return {k: str(v) for k, v in sync.items()}
+
+
 def _load_config_toml() -> str | None:
     """Load journal_file from config.toml if it exists.
 

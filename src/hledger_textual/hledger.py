@@ -233,7 +233,10 @@ def _parse_transaction(data: dict) -> Transaction:
 
 
 def load_transactions(
-    file: str | Path, query: str | None = None, reverse: bool = False
+    file: str | Path,
+    query: str | None = None,
+    reverse: bool = False,
+    cache: "HledgerCache | None" = None,
 ) -> list[Transaction]:
     """Load transactions from a journal file, optionally filtered by a query.
 
@@ -243,6 +246,7 @@ def load_transactions(
             provided it is appended to the hledger print command so that only
             matching transactions are returned.
         reverse: If True, return transactions in reverse order (newest first).
+        cache: Optional cache instance to avoid repeated subprocess calls.
 
     Returns:
         A list of Transaction objects.
@@ -253,17 +257,33 @@ def load_transactions(
     args = ["print", "-O", "json"]
     if query:
         args.extend(query.split())
+
+    cache_key = ("load_transactions", tuple(args), str(file), reverse)
+    if cache is not None:
+        cached = cache.get(cache_key, file=file)
+        if cached is not None:
+            return cached
+
     output = run_hledger(*args, file=file)
     data = json.loads(output)
     txns = [_parse_transaction(t) for t in data]
-    return list(reversed(txns)) if reverse else txns
+    result = list(reversed(txns)) if reverse else txns
+
+    if cache is not None:
+        cache.put(cache_key, result, file=file)
+
+    return result
 
 
-def load_account_balances(file: str | Path) -> list[tuple[str, str]]:
+def load_account_balances(
+    file: str | Path,
+    cache: "HledgerCache | None" = None,
+) -> list[tuple[str, str]]:
     """Load all accounts with their current balances.
 
     Args:
         file: Path to the journal file.
+        cache: Optional cache instance to avoid repeated subprocess calls.
 
     Returns:
         A list of (account_name, balance_string) tuples, ordered as hledger
@@ -272,14 +292,25 @@ def load_account_balances(file: str | Path) -> list[tuple[str, str]]:
     Raises:
         HledgerError: If hledger fails or is not found.
     """
+    cache_key = ("load_account_balances", str(file))
+    if cache is not None:
+        cached = cache.get(cache_key, file=file)
+        if cached is not None:
+            return cached
+
     output = run_hledger("balance", "--flat", "--no-total", "-O", "csv", file=file)
     reader = csv.reader(io.StringIO(output))
     next(reader, None)  # skip header row ("account","balance")
-    return [
+    result = [
         (row[0], row[1])
         for row in reader
         if len(row) >= 2 and row[0] and row[1]
     ]
+
+    if cache is not None:
+        cache.put(cache_key, result, file=file)
+
+    return result
 
 
 def load_account_tree_balances(file: str | Path) -> list["AccountNode"]:
@@ -550,7 +581,11 @@ def _parse_budget_amount(s: str) -> tuple[Decimal, str]:
         return Decimal("0"), ""
 
 
-def load_budget_report(file: str | Path, period: str) -> list[BudgetRow]:
+def load_budget_report(
+    file: str | Path,
+    period: str,
+    cache: "HledgerCache | None" = None,
+) -> list[BudgetRow]:
     """Load budget vs actual data for a given period.
 
     Runs ``hledger balance --budget`` and parses the CSV output.
@@ -558,6 +593,7 @@ def load_budget_report(file: str | Path, period: str) -> list[BudgetRow]:
     Args:
         file: Path to the journal file.
         period: A period string like '2026-02' for hledger's -p flag.
+        cache: Optional cache instance to avoid repeated subprocess calls.
 
     Returns:
         A list of BudgetRow objects with actual and budget amounts.
@@ -565,6 +601,12 @@ def load_budget_report(file: str | Path, period: str) -> list[BudgetRow]:
     Raises:
         HledgerError: If hledger fails or is not found.
     """
+    cache_key = ("load_budget_report", str(file), period)
+    if cache is not None:
+        cached = cache.get(cache_key, file=file)
+        if cached is not None:
+            return cached
+
     output = run_hledger(
         "balance", "--budget", "-p", period, "-O", "csv",
         "--no-total", "Expenses",
@@ -621,6 +663,9 @@ def load_budget_report(file: str | Path, period: str) -> list[BudgetRow]:
                 commodity=commodity,
             ))
 
+    if cache is not None:
+        cache.put(cache_key, rows, file=file)
+
     return rows
 
 
@@ -667,7 +712,11 @@ def load_journal_stats(file: str | Path) -> JournalStats:
     )
 
 
-def load_period_summary(file: str | Path, period: str | None = None) -> PeriodSummary:
+def load_period_summary(
+    file: str | Path,
+    period: str | None = None,
+    cache: "HledgerCache | None" = None,
+) -> PeriodSummary:
     """Load income, expense, and investment totals for a single period.
 
     Two separate queries are used: one for income/expenses (unmodified) and
@@ -680,6 +729,7 @@ def load_period_summary(file: str | Path, period: str | None = None) -> PeriodSu
         period: A period string like ``'2026-02'`` for hledger's ``-p`` flag.
             When ``None``, all transactions across the entire journal are
             included (no ``-p`` flag is passed).
+        cache: Optional cache instance to avoid repeated subprocess calls.
 
     Returns:
         A :class:`PeriodSummary` instance.
@@ -687,6 +737,12 @@ def load_period_summary(file: str | Path, period: str | None = None) -> PeriodSu
     Raises:
         HledgerError: If hledger fails or is not found.
     """
+    cache_key = ("load_period_summary", str(file), period)
+    if cache is not None:
+        cached = cache.get(cache_key, file=file)
+        if cached is not None:
+            return cached
+
     period_args = ("-p", period) if period else ()
 
     # Query 1a: income/revenue accounts (type:R — respects account type metadata)
@@ -747,10 +803,15 @@ def load_period_summary(file: str | Path, period: str | None = None) -> PeriodSu
     except HledgerError:
         pass  # no investments or hledger error, keep 0
 
-    return PeriodSummary(
+    result = PeriodSummary(
         income=income, expenses=expenses,
         commodity=commodity, investments=investments,
     )
+
+    if cache is not None:
+        cache.put(cache_key, result, file=file)
+
+    return result
 
 
 def _load_account_breakdown(
@@ -1081,6 +1142,7 @@ def load_report(
     period_begin: str | None = None,
     period_end: str | None = None,
     commodity: str | None = None,
+    cache: "HledgerCache | None" = None,
 ) -> ReportData:
     """Load a multi-period financial report from hledger.
 
@@ -1094,6 +1156,7 @@ def load_report(
         period_end: Optional end date (``YYYY-MM-DD``) for ``-e`` flag.
         commodity: Optional commodity code for ``-X`` flag to convert
             multi-commodity amounts into a single commodity.
+        cache: Optional cache instance to avoid repeated subprocess calls.
 
     Returns:
         A :class:`ReportData` with the parsed report.
@@ -1101,6 +1164,12 @@ def load_report(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
+    cache_key = ("load_report", str(file), report_type, period_begin, period_end, commodity)
+    if cache is not None:
+        cached = cache.get(cache_key, file=file)
+        if cached is not None:
+            return cached
+
     args = [report_type, "-M", "-O", "csv", "--no-elide"]
     if commodity:
         args.extend(["-X", commodity])
@@ -1110,4 +1179,9 @@ def load_report(
         args.extend(["-e", period_end])
 
     output = run_hledger(*args, file=file)
-    return _parse_report_csv(output)
+    result = _parse_report_csv(output)
+
+    if cache is not None:
+        cache.put(cache_key, result, file=file)
+
+    return result
