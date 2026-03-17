@@ -46,14 +46,14 @@ def ensure_budget_file(journal_file: Path) -> Path:
     budget_file = _budget_path(journal_file)
 
     if not budget_file.exists():
-        budget_file.write_text("")
+        budget_file.write_text("", encoding="utf-8")
 
-    journal_text = journal_file.read_text()
+    journal_text = journal_file.read_text(encoding="utf-8")
     if not _INCLUDE_RE.search(journal_text):
         include_line = f"include {BUDGET_FILENAME}\n"
         if journal_text and not journal_text.startswith("\n"):
             include_line += "\n"
-        journal_file.write_text(include_line + journal_text)
+        journal_file.write_text(include_line + journal_text, encoding="utf-8")
 
     return budget_file
 
@@ -81,7 +81,7 @@ def parse_budget_rules(budget_path: Path) -> list[BudgetRule]:
     if not budget_path.exists():
         return []
 
-    content = budget_path.read_text()
+    content = budget_path.read_text(encoding="utf-8")
     if not content.strip():
         return []
 

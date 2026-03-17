@@ -35,6 +35,7 @@ def run_rclone(*args: str, timeout: int = 60) -> str:
             check=True,
             timeout=timeout,
             env=env,
+            encoding="utf-8",
         )
     except FileNotFoundError:
         raise CloudSyncError(

@@ -65,14 +65,14 @@ def ensure_recurring_file(journal_file: Path) -> Path:
     recurring_file = journal_file.parent / RECURRING_FILENAME
 
     if not recurring_file.exists():
-        recurring_file.write_text("")
+        recurring_file.write_text("", encoding="utf-8")
 
-    journal_text = journal_file.read_text()
+    journal_text = journal_file.read_text(encoding="utf-8")
     if not _INCLUDE_RE.search(journal_text):
         include_line = f"include {RECURRING_FILENAME}\n"
         if journal_text and not journal_text.startswith("\n"):
             include_line += "\n"
-        journal_file.write_text(include_line + journal_text)
+        journal_file.write_text(include_line + journal_text, encoding="utf-8")
 
     return recurring_file
 
@@ -144,7 +144,7 @@ def parse_recurring_rules(path: Path) -> list[RecurringRule]:
     if not path.exists():
         return []
 
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
     if not content.strip():
         return []
 
@@ -437,7 +437,8 @@ def validate_period_expr(expr: str) -> bool:
         temp_journal.write_text(
             f"~ {expr}\n"
             "    expenses:test    €1.00\n"
-            "    assets:test\n"
+            "    assets:test\n",
+            encoding="utf-8",
         )
         try:
             run_hledger(
@@ -478,7 +479,8 @@ def _get_occurrence_dates_hledger(
         temp_journal.write_text(
             f"~ {rule.period_expr} from {start.isoformat()}\n"
             "    expenses:test    €1.00\n"
-            "    assets:test\n"
+            "    assets:test\n",
+            encoding="utf-8",
         )
         forecast_range = f"{start.isoformat()}..{end.isoformat()}"
         try:

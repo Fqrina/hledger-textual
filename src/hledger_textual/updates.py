@@ -34,7 +34,7 @@ def _read_cache() -> tuple[str | None, datetime | None]:
         or unreadable.
     """
     try:
-        with open(_CACHE_PATH) as f:
+        with open(_CACHE_PATH, encoding="utf-8") as f:
             data = json.load(f)
         return data["latest_version"], datetime.fromisoformat(data["checked_at"])
     except Exception:
@@ -45,7 +45,7 @@ def _write_cache(version: str) -> None:
     """Persist the latest version and current timestamp to the cache file."""
     try:
         _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(_CACHE_PATH, "w") as f:
+        with open(_CACHE_PATH, "w", encoding="utf-8") as f:
             json.dump(
                 {"latest_version": version, "checked_at": datetime.now().isoformat()},
                 f,

@@ -45,6 +45,7 @@ def get_pricehist_version() -> str:
             capture_output=True,
             text=True,
             check=True,
+            encoding="utf-8",
         )
         raw = result.stdout.strip()
         # Strip program name prefix: "pricehist 1.4.14" → "1.4.14"
@@ -115,6 +116,7 @@ def fetch_prices(tickers: dict[str, str]) -> Path:
                 capture_output=True,
                 text=True,
                 check=True,
+                encoding="utf-8",
             )
             for line in result.stdout.splitlines():
                 if line.startswith("P "):
@@ -123,7 +125,7 @@ def fetch_prices(tickers: dict[str, str]) -> Path:
             pass  # ticker unavailable or market closed, skip silently
 
     cache = _cache_path()
-    cache.write_text("\n".join(lines) + ("\n" if lines else ""))
+    cache.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
     return cache
 
 

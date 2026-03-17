@@ -54,6 +54,7 @@ def run_hledger(*args: str, file: str | Path | None = None) -> str:
             capture_output=True,
             text=True,
             check=True,
+            encoding="utf-8",
         )
     except FileNotFoundError:
         raise HledgerError(
