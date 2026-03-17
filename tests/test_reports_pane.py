@@ -322,10 +322,10 @@ class TestReportsPaneInvestments:
             ]
             assert "Investments" in section_names
 
-            # Check that investment data rows are present
+            # Check that investment data rows are present (prefix stripped)
             accounts = [r.account for r in pane._report_data.rows]
-            assert "assets:investments:XDWD" in accounts
-            assert "assets:investments:XEON" in accounts
+            assert "XDWD" in accounts
+            assert "XEON" in accounts
 
     async def test_investments_no_effect_on_bs(
         self, reports_journal: Path, monkeypatch
