@@ -205,15 +205,17 @@ class TestGitSync:
 
     async def test_git_sync_not_a_repo(self, app: HledgerTuiApp, monkeypatch):
         """Pressing s when not in a git repo shows a warning notification."""
-        monkeypatch.setattr(
-            "hledger_textual.git.is_git_repo", lambda _: False
-        )
+        from hledger_textual.sync import GitSyncBackend
+
+        backend = GitSyncBackend(app.journal_file)
+        monkeypatch.setattr(backend, "is_available", lambda: False)
+        app._sync_backend = backend
         async with app.run_test(notifications=True) as pilot:
             await pilot.pause()
             await pilot.press("s")
             await pilot.pause(delay=0.5)
             assert any(
-                "Not a git repository" in str(n.message)
+                "Git is not available" in str(n.message)
                 for n in app._notifications
             )
 
@@ -222,10 +224,11 @@ class TestGitSync:
     ):
         """Pressing s in a git repo opens the confirmation dialog."""
         from hledger_textual.screens.sync_confirm import SyncConfirmModal
+        from hledger_textual.sync import GitSyncBackend
 
-        monkeypatch.setattr(
-            "hledger_textual.git.is_git_repo", lambda _: True
-        )
+        backend = GitSyncBackend(app.journal_file)
+        monkeypatch.setattr(backend, "is_available", lambda: True)
+        app._sync_backend = backend
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("s")
@@ -234,18 +237,21 @@ class TestGitSync:
 
     async def test_git_sync_cancel(self, app: HledgerTuiApp, monkeypatch):
         """Cancelling the dialog does not run git_sync."""
-        monkeypatch.setattr(
-            "hledger_textual.git.is_git_repo", lambda _: True
-        )
-        sync_called = False
-        original_git_sync = None
+        from hledger_textual.sync import GitSyncBackend
 
-        def _track(_):
+        backend = GitSyncBackend(app.journal_file)
+        monkeypatch.setattr(backend, "is_available", lambda: True)
+        sync_called = False
+
+        original_run = backend.run
+
+        def _track(action, journal_file):
             nonlocal sync_called
             sync_called = True
             return "ok"
 
-        monkeypatch.setattr("hledger_textual.git.git_sync", _track)
+        monkeypatch.setattr(backend, "run", _track)
+        app._sync_backend = backend
         async with app.run_test(notifications=True) as pilot:
             await pilot.pause()
             await pilot.press("s")
@@ -257,19 +263,21 @@ class TestGitSync:
     async def test_git_sync_confirm_success(
         self, app: HledgerTuiApp, monkeypatch
     ):
-        """Confirming sync runs git_sync and shows success notification."""
+        """Confirming sync runs backend and shows success notification."""
+        from hledger_textual.sync import GitSyncBackend
+
+        backend = GitSyncBackend(app.journal_file)
+        monkeypatch.setattr(backend, "is_available", lambda: True)
         monkeypatch.setattr(
-            "hledger_textual.git.is_git_repo", lambda _: True
+            backend, "run",
+            lambda action, jf: "Committed and pushed successfully",
         )
-        monkeypatch.setattr(
-            "hledger_textual.git.git_sync",
-            lambda _: "Committed and pushed successfully",
-        )
+        app._sync_backend = backend
         async with app.run_test(notifications=True) as pilot:
             await pilot.pause()
             await pilot.press("s")
             await pilot.pause()
-            sync_btn = app.screen.query_one("#btn-sync")
+            sync_btn = app.screen.query_one("#btn-sync-sync")
             await pilot.click(sync_btn)
             await pilot.pause(delay=0.5)
             assert any(
@@ -280,22 +288,22 @@ class TestGitSync:
     async def test_git_sync_confirm_error(
         self, app: HledgerTuiApp, monkeypatch
     ):
-        """GitError during sync shows an error notification."""
-        from hledger_textual.git import GitError
+        """SyncError during sync shows an error notification."""
+        from hledger_textual.sync import GitSyncBackend, SyncError
 
-        monkeypatch.setattr(
-            "hledger_textual.git.is_git_repo", lambda _: True
-        )
+        backend = GitSyncBackend(app.journal_file)
+        monkeypatch.setattr(backend, "is_available", lambda: True)
 
-        def _raise(_):
-            raise GitError("push failed")
+        def _raise(action, journal_file):
+            raise SyncError("push failed")
 
-        monkeypatch.setattr("hledger_textual.git.git_sync", _raise)
+        monkeypatch.setattr(backend, "run", _raise)
+        app._sync_backend = backend
         async with app.run_test(notifications=True) as pilot:
             await pilot.pause()
             await pilot.press("s")
             await pilot.pause()
-            sync_btn = app.screen.query_one("#btn-sync")
+            sync_btn = app.screen.query_one("#btn-sync-sync")
             await pilot.click(sync_btn)
             await pilot.pause(delay=0.5)
             assert any(

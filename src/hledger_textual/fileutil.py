@@ -66,7 +66,7 @@ def safe_write_with_validation(
     bak = backup(target_file)
 
     try:
-        target_file.write_text(content)
+        target_file.write_text(content, encoding="utf-8")
 
         try:
             validate(journal_file)

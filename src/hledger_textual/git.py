@@ -37,6 +37,7 @@ def run_git(*args: str, cwd: Path) -> str:
             cwd=cwd,
             timeout=30,
             env=env,
+            encoding="utf-8",
         )
     except FileNotFoundError:
         raise GitError("git not found. Please install git.")
