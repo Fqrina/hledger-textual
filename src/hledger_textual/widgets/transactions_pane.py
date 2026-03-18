@@ -50,6 +50,7 @@ class TransactionsPane(Widget):
             priority=True,
         ),
         Binding("x", "export", "Export", show=False, priority=True),
+        Binding("i", "import_csv", "Import", show=True, priority=True),
     ]
 
     def __init__(
@@ -328,4 +329,115 @@ class TransactionsPane(Widget):
         except JournalError as exc:
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8
+            )
+
+    # ------------------------------------------------------------------
+    # CSV Import
+    # ------------------------------------------------------------------
+
+    def action_import_csv(self) -> None:
+        """Start the CSV import flow: file select -> rules manager -> wizard -> preview."""
+        from hledger_textual.screens.csv_file_select import CsvFileSelectModal
+
+        def on_file_selected(csv_path: Path | None) -> None:
+            if csv_path is not None:
+                self._show_rules_manager(csv_path)
+
+        self.app.push_screen(CsvFileSelectModal(), callback=on_file_selected)
+
+    def _show_rules_manager(self, csv_path: Path) -> None:
+        """Show the rules manager after CSV file selection."""
+        from hledger_textual.screens.rules_manager import RulesManagerModal
+
+        def on_result(result: tuple | None) -> None:
+            if result is None:
+                return
+            action, rules_file = result
+            if action == "select" and rules_file is not None:
+                self._preview_and_import(csv_path, rules_file.path)
+            elif action == "new":
+                self._show_wizard(csv_path, existing_rules=None)
+            elif action == "edit" and rules_file is not None:
+                self._show_wizard(csv_path, existing_rules=rules_file)
+
+        self.app.push_screen(
+            RulesManagerModal(self.journal_file), callback=on_result
+        )
+
+    def _show_wizard(self, csv_path: Path, existing_rules=None) -> None:
+        """Show the import wizard for creating/editing rules."""
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+        def on_wizard_result(result: tuple | None) -> None:
+            if result is not None:
+                csv_p, rules_p = result
+                self._preview_and_import(csv_p, rules_p)
+
+        self.app.push_screen(
+            ImportWizardScreen(
+                csv_path=csv_path,
+                journal_file=self.journal_file,
+                existing_rules=existing_rules,
+            ),
+            callback=on_wizard_result,
+        )
+
+    @work(thread=True)
+    def _preview_and_import(self, csv_path: Path, rules_path: Path) -> None:
+        """Run preview in a thread, then show preview screen for confirmation."""
+        from hledger_textual.csv_import import (
+            CsvImportError,
+            check_duplicates,
+            preview_import,
+        )
+        from hledger_textual.screens.import_preview import ImportPreviewScreen
+
+        try:
+            transactions = preview_import(csv_path, rules_path)
+            new_txns, dupes = check_duplicates(transactions, self.journal_file)
+        except CsvImportError as exc:
+            self.app.call_from_thread(
+                self.notify, f"Import error: {exc}", severity="error", timeout=8
+            )
+            return
+
+        def show_preview() -> None:
+            def on_confirm(confirmed: list[Transaction] | None) -> None:
+                if confirmed:
+                    self._do_import(confirmed)
+
+            self.app.push_screen(
+                ImportPreviewScreen(new_txns, len(dupes)),
+                callback=on_confirm,
+            )
+
+        self.app.call_from_thread(show_preview)
+
+    @work(thread=True)
+    def _do_import(self, transactions: list[Transaction]) -> None:
+        """Import confirmed transactions into the journal."""
+        from hledger_textual.journal import JournalError, append_transaction
+
+        count = 0
+        for txn in transactions:
+            try:
+                append_transaction(self.journal_file, txn)
+                count += 1
+            except JournalError as exc:
+                self.app.call_from_thread(
+                    self.notify,
+                    f"Import failed at transaction {count + 1}: {exc}",
+                    severity="error",
+                    timeout=8,
+                )
+                break
+
+        if count > 0:
+            self.app.call_from_thread(
+                self.notify,
+                f"Imported {count} transaction{'s' if count != 1 else ''}",
+                timeout=5,
+            )
+            self.app.call_from_thread(
+                self._table.post_message, TransactionsTable.JournalChanged()
             )

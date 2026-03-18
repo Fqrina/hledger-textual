@@ -82,7 +82,7 @@ class AboutModal(ModalScreen[None]):
 
     BINDINGS = [
         Binding("escape", "dismiss_about", "Close"),
-        Binding("i", "dismiss_about", "Close"),
+        Binding("question_mark", "dismiss_about", "Close"),
     ]
 
     def __init__(self, journal_file: Path) -> None:
@@ -115,7 +115,7 @@ class AboutModal(ModalScreen[None]):
             yield Static(tools_placeholder, id="about-tools")
             yield Static("", id="about-git")
             yield Static(
-                "Press [b]Esc[/b] or [b]i[/b] to close", id="about-footer"
+                "Press [b]Esc[/b] or [b]?[/b] to close", id="about-footer"
             )
 
     def on_mount(self) -> None:

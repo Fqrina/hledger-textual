@@ -74,7 +74,6 @@ class HledgerTuiApp(App):
         Binding("4", "switch_section('budget')", "Budget", show=False),
         Binding("5", "switch_section('reports')", "Reports", show=False),
         Binding("6", "switch_section('accounts')", "Accounts", show=False),
-        Binding("i", "show_about", "About", show=False),
         Binding("s", "sync", "Sync", show=False),
         Binding("question_mark", "show_help", "Help", show=False),
         Binding("q", "quit", "Quit"),
@@ -278,17 +277,11 @@ class HledgerTuiApp(App):
         """Switch to the given section via keyboard shortcut (1-6)."""
         self._activate_section(section)
 
-    def action_show_about(self) -> None:
-        """Open the about modal with journal and app information."""
-        from hledger_textual.screens.about import AboutModal
-
-        self.push_screen(AboutModal(self.journal_file))
-
     def action_show_help(self) -> None:
-        """Open the keyboard shortcuts help panel."""
+        """Open the combined help and about panel."""
         from hledger_textual.screens.help import HelpScreen
 
-        self.push_screen(HelpScreen())
+        self.push_screen(HelpScreen(self.journal_file))
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:
         """Disable the sync action when no backend is configured."""

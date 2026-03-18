@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
+from pathlib import Path
 
 
 class TransactionStatus(Enum):
@@ -294,6 +295,26 @@ class AccountDirective:
     name: str
     comment: str = ""
     tags: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class CsvRulesFile:
+    """Metadata for an hledger CSV rules file used by the import wizard.
+
+    Each instance corresponds to a ``.rules`` file on disk. The structured
+    fields are extracted from the rules syntax so that the wizard UI can
+    display and edit them without requiring the user to hand-edit text.
+    """
+
+    name: str
+    path: Path
+    account1: str
+    separator: str
+    date_format: str
+    skip: int
+    field_mapping: list[str]
+    currency: str
+    conditional_rules: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass

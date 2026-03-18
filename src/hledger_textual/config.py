@@ -209,6 +209,23 @@ def load_export_dir() -> Path:
     return Path.home() / "Documents" / "hledger-exports"
 
 
+def load_rules_dir() -> Path | None:
+    """Return the configured CSV rules directory, or ``None`` for the default.
+
+    Reads the ``[import] rules_dir`` key from config.toml.  When ``None``
+    is returned the caller should fall back to ``{journal_dir}/rules/``.
+
+    Returns:
+        Resolved path if configured, otherwise ``None``.
+    """
+    config = _load_config_dict()
+    imp = config.get("import", {})
+    dir_str = imp.get("rules_dir", "") if isinstance(imp, dict) else ""
+    if dir_str:
+        return Path(dir_str).expanduser().resolve()
+    return None
+
+
 def load_sync_config() -> dict | None:
     """Return sync configuration, or None if sync is disabled.
 
