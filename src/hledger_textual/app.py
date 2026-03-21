@@ -38,7 +38,8 @@ def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
         "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {global_part}",
         "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {global_part}",
         "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  {global_part}",
-        "reports": f"\\[c] Chart  \\[i] Inv  \\[r] Reload  {global_part}",
+        "reports": f"\\[n] New  \\[c] Chart  \\[i] Inv  \\[r] Reload  {global_part}",
+        "reports-custom": f"\\[esc] Back  \\[n] New  \\[e] Edit  \\[d] Del  \\[r] Reload  {global_part}",
         "recurring": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[g] Generate  \\[r] Reload  {global_part}",
     }
 
@@ -272,6 +273,15 @@ class HledgerTuiApp(App):
     ) -> None:
         """Silently refresh all data panes after recurring transactions are generated."""
         self._refresh_all_panes()
+
+    def on_reports_pane_custom_report_state_changed(
+        self, event: ReportsPane.CustomReportStateChanged
+    ) -> None:
+        """Update the Reports footer when switching between built-in and custom modes."""
+        key = "reports-custom" if event.active else "reports"
+        self.query_one("#footer-bar", Static).update(
+            self._footer_commands.get(key, "")
+        )
 
     def action_switch_section(self, section: str) -> None:
         """Switch to the given section via keyboard shortcut (1-6)."""
