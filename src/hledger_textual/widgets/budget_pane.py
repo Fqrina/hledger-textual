@@ -110,7 +110,10 @@ class BudgetPane(DataTablePaneMixin, Widget):
         """Load budget rules and actual spending data."""
         try:
             self._budget_path = ensure_budget_file(self.journal_file)
-            self._rules = parse_budget_rules(self._budget_path)
+            self._rules = sorted(
+                parse_budget_rules(self._budget_path),
+                key=lambda r: r.account.lower(),
+            )
         except BudgetError as exc:
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8
