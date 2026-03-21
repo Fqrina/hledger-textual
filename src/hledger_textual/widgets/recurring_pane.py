@@ -79,7 +79,10 @@ class RecurringPane(DataTablePaneMixin, Widget):
         """Load recurring rules from file."""
         try:
             self._recurring_path = ensure_recurring_file(self.journal_file)
-            self._rules = parse_recurring_rules(self._recurring_path)
+            self._rules = sorted(
+                parse_recurring_rules(self._recurring_path),
+                key=lambda r: r.start_date or "",
+            )
         except RecurringError as exc:
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8
