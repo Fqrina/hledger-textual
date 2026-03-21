@@ -10,7 +10,7 @@ from textual.widgets import Button, DataTable, Label, Static
 from hledger_textual.models import Transaction
 
 
-class ImportPreviewScreen(ModalScreen[list[Transaction] | None]):
+class ImportPreviewScreen(ModalScreen[list[Transaction] | None | str]):
     """Preview transactions parsed from CSV before importing.
 
     Follows the same pattern as :class:`RecurringGenerateScreen`.
@@ -55,6 +55,9 @@ class ImportPreviewScreen(ModalScreen[list[Transaction] | None]):
                     "Cancel", variant="default", id="btn-import-cancel"
                 )
                 yield Button(
+                    "\u2190 Back", variant="default", id="btn-import-back"
+                )
+                yield Button(
                     "Import All", variant="success", id="btn-import-confirm"
                 )
 
@@ -68,22 +71,18 @@ class ImportPreviewScreen(ModalScreen[list[Transaction] | None]):
         table.add_column("Amount", width=16)
 
         for txn in self.transactions:
-            # Find the non-account1 posting for display
-            account2 = ""
+            # account1 (bank) is the first posting and carries the explicit amount.
+            # account2 (expense/income category) is the second posting and is
+            # auto-balanced by hledger, so it has no explicit amount.
             amount_str = ""
-            for posting in txn.postings:
-                if posting.amounts:
-                    amount_str = posting.amounts[0].format()
-                    account2 = posting.account
-                    break
-            # If no amount found on first posting, try second
-            if not amount_str and len(txn.postings) > 1:
-                for posting in txn.postings[1:]:
-                    if posting.amounts:
-                        amount_str = posting.amounts[0].format()
-                        break
+            if txn.postings and txn.postings[0].amounts:
+                amount_str = txn.postings[0].amounts[0].format()
 
-            table.add_row(txn.date, txn.description, account2, amount_str)
+            category = txn.postings[1].account if len(txn.postings) > 1 else (
+                txn.postings[0].account if txn.postings else ""
+            )
+
+            table.add_row(txn.date, txn.description, category, amount_str)
 
         if not self.transactions:
             self.query_one("#btn-import-confirm", Button).disabled = True
@@ -92,6 +91,8 @@ class ImportPreviewScreen(ModalScreen[list[Transaction] | None]):
         """Handle button presses."""
         if event.button.id == "btn-import-confirm":
             self.dismiss(self.transactions)
+        elif event.button.id == "btn-import-back":
+            self.dismiss("back")
         else:
             self.dismiss(None)
 

@@ -49,7 +49,7 @@ class RulesManagerModal(ModalScreen[tuple[str, CsvRulesFile | None] | None]):
                 yield Button("Edit", variant="default", id="btn-rules-edit")
                 yield Button("+ New", variant="default", id="btn-rules-new")
                 yield Button(
-                    "Use Selected", variant="primary", id="btn-rules-use"
+                    "Use selected", variant="primary", id="btn-rules-use"
                 )
 
     def on_mount(self) -> None:

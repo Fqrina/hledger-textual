@@ -402,9 +402,11 @@ class TransactionsPane(Widget):
             return
 
         def show_preview() -> None:
-            def on_confirm(confirmed: list[Transaction] | None) -> None:
-                if confirmed:
-                    self._do_import(confirmed)
+            def on_confirm(result: list[Transaction] | None | str) -> None:
+                if result == "back":
+                    self._show_rules_manager(csv_path)
+                elif result:
+                    self._do_import(result)
 
             self.app.push_screen(
                 ImportPreviewScreen(new_txns, len(dupes)),

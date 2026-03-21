@@ -8,6 +8,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
+from textual.suggester import SuggestFromList
 from textual.widgets import Button, DataTable, Input, Label, Select, Static, TextArea
 
 from hledger_textual.config import load_default_commodity
@@ -191,7 +192,7 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
                     id="btn-wizard-save",
                 )
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
         """Initialize the wizard with auto-detected values."""
         # Load accounts for autocomplete
         try:
@@ -200,17 +201,17 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
             self.accounts = []
 
         account1_input = self.query_one("#wizard-account1", AutocompleteInput)
-        account1_input.suggester = _AccountSuggester(self.accounts)
+        account1_input.suggester = SuggestFromList(self.accounts, case_sensitive=False)
 
         # If editing existing rules, populate from them
         if self.existing_rules:
-            self._init_from_existing()
+            await self._init_from_existing()
         else:
-            self._init_auto_detect()
+            await self._init_auto_detect()
 
         self._show_step(0)
 
-    def _init_auto_detect(self) -> None:
+    async def _init_auto_detect(self) -> None:
         """Auto-detect CSV properties and populate initial values."""
         self._separator = detect_separator(self.csv_path)
         self._has_header, self._column_names = detect_header_row(
@@ -245,9 +246,9 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
         )
         self.query_one("#wizard-date-format", Input).value = self._date_format
         self._populate_csv_preview()
-        self._populate_mapping()
+        await self._populate_mapping()
 
-    def _init_from_existing(self) -> None:
+    async def _init_from_existing(self) -> None:
         """Populate wizard from an existing rules file."""
         r = self.existing_rules
         assert r is not None
@@ -279,7 +280,7 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
         self.query_one("#wizard-date-format", Input).value = r.date_format
 
         self._populate_csv_preview()
-        self._populate_mapping()
+        await self._populate_mapping()
 
         # Populate conditional rules
         for pattern, acct2 in r.conditional_rules:
@@ -311,12 +312,10 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
             padded = row + [""] * (len(self._column_names) - len(row))
             table.add_row(*padded[: len(self._column_names)])
 
-    def _populate_mapping(self) -> None:
+    async def _populate_mapping(self) -> None:
         """Build the column mapping widgets."""
         container = self.query_one("#wizard-mapping-container", Vertical)
-        # Remove existing children
-        for child in list(container.children):
-            child.remove()
+        await container.remove_children()
 
         for i, col_name in enumerate(self._column_names):
             sample_val = ""
@@ -324,9 +323,6 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
                 sample_val = self._sample_rows[0][i]
 
             initial = self._field_mapping[i] if i < len(self._field_mapping) else ""
-
-            with container.compose_add_child(Horizontal(classes="mapping-row")):
-                pass
 
             row = Horizontal(classes="mapping-row", id=f"mapping-row-{i}")
             label = Label(f'"{col_name}"', classes="mapping-label")
@@ -364,7 +360,7 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
             id=f"cond-account-{idx}",
             classes="cond-account",
         )
-        acct_input.suggester = _AccountSuggester(self.accounts)
+        acct_input.suggester = SuggestFromList(self.accounts, case_sensitive=False)
 
         container.mount(row)
         row.mount(pattern_input)
@@ -538,7 +534,7 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
                 self._remove_last_conditional_rule()
 
     @on(Select.Changed, "#wizard-separator")
-    def _on_separator_changed(self, event: Select.Changed) -> None:
+    async def _on_separator_changed(self, event: Select.Changed) -> None:
         """Re-detect headers and reload preview when separator changes."""
         sep = str(event.value) if event.value != Select.BLANK else ","
         self._separator = sep
@@ -556,10 +552,10 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
             "yes" if self._has_header else "no"
         )
         self._populate_csv_preview()
-        self._populate_mapping()
+        await self._populate_mapping()
 
     @on(Select.Changed, "#wizard-header")
-    def _on_header_changed(self, event: Select.Changed) -> None:
+    async def _on_header_changed(self, event: Select.Changed) -> None:
         """Reload preview when header setting changes."""
         self._has_header = event.value == "yes"
         skip = 1 if self._has_header else 0
@@ -579,7 +575,7 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
             self._column_names, self._sample_rows
         )
         self._populate_csv_preview()
-        self._populate_mapping()
+        await self._populate_mapping()
 
     def _do_save(self) -> None:
         """Save the rules file and dismiss with paths."""
@@ -607,18 +603,3 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
         self.dismiss(None)
 
 
-class _AccountSuggester:
-    """Simple suggester for account autocomplete."""
-
-    def __init__(self, accounts: list[str]) -> None:
-        self._accounts = accounts
-
-    async def get_suggestion(self, value: str) -> str | None:
-        """Return the first account that starts with the given value."""
-        if not value:
-            return None
-        lower = value.lower()
-        for acct in self._accounts:
-            if acct.lower().startswith(lower) and acct != value:
-                return acct
-        return None
