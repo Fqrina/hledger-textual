@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import shlex
 import subprocess
 from decimal import Decimal
 from pathlib import Path
@@ -1186,3 +1187,24 @@ def load_report(
         cache.put(cache_key, result, file=file)
 
     return result
+
+
+def run_custom_report(file: str | Path, command: str) -> str:
+    """Run a custom hledger command and return the raw text output.
+
+    The ``command`` string is split with :func:`shlex.split`, so quoting
+    rules follow standard shell conventions.
+
+    Args:
+        file: Path to the journal file.
+        command: hledger argument string without the ``-f`` flag
+            (e.g. ``"balance expenses --tree -M"``).
+
+    Returns:
+        The raw stdout output as a string.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    args = shlex.split(command)
+    return run_hledger(*args, file=file)

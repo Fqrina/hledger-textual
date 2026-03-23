@@ -226,6 +226,48 @@ def load_rules_dir() -> Path | None:
     return None
 
 
+def load_custom_reports() -> dict[str, str]:
+    """Return saved custom reports from config.toml.
+
+    Reads the ``[custom_reports]`` section, where each key is a report name and
+    each value is an hledger command string (args without the ``-f`` flag).
+
+    Returns:
+        A dict mapping report name → hledger command string.
+        Returns an empty dict when no ``[custom_reports]`` section exists.
+    """
+    config = _load_config_dict()
+    reports = config.get("custom_reports", {})
+    return {str(k): str(v) for k, v in reports.items()}
+
+
+def save_custom_report(name: str, command: str) -> None:
+    """Save a named custom report to config.toml.
+
+    Args:
+        name: Display name for the report.
+        command: hledger command string (args without ``-f``).
+    """
+    data = _load_config_dict()
+    if "custom_reports" not in data:
+        data["custom_reports"] = {}
+    data["custom_reports"][name] = command
+    _save_config_dict(data)
+
+
+def delete_custom_report(name: str) -> None:
+    """Delete a named custom report from config.toml.
+
+    Args:
+        name: The report name to remove.  No-op if the name does not exist.
+    """
+    data = _load_config_dict()
+    reports = data.get("custom_reports", {})
+    reports.pop(name, None)
+    data["custom_reports"] = reports
+    _save_config_dict(data)
+
+
 def load_sync_config() -> dict | None:
     """Return sync configuration, or None if sync is disabled.
 

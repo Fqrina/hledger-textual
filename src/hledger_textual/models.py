@@ -318,6 +318,18 @@ class CsvRulesFile:
 
 
 @dataclass
+class CustomReport:
+    """A user-defined custom hledger report.
+
+    The ``command`` field holds the hledger argument string without the
+    ``-f`` journal flag (e.g. ``"balance expenses --tree -M"``).
+    """
+
+    name: str
+    command: str
+
+
+@dataclass
 class ReportData:
     """Parsed output of a multi-period hledger report (IS, BS, CF).
 
