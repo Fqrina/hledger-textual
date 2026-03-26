@@ -346,8 +346,22 @@ class TransactionsPane(Widget):
         self.app.push_screen(CsvFileSelectModal(), callback=on_file_selected)
 
     def _show_rules_manager(self, csv_path: Path) -> None:
-        """Show the rules manager after CSV file selection."""
+        """Show the rules manager after CSV file selection.
+
+        If a companion rules file exists next to the CSV (hledger convention:
+        ``bank.csv`` → ``bank.csv.rules``), it is used directly without
+        opening the rules manager.
+        """
+        from hledger_textual.csv_import import find_companion_rules
         from hledger_textual.screens.rules_manager import RulesManagerModal
+
+        companion = find_companion_rules(csv_path)
+        if companion is not None:
+            self.notify(
+                f"Using companion rules: {companion.name}", timeout=4
+            )
+            self._preview_and_import(csv_path, companion)
+            return
 
         def on_result(result: tuple | None) -> None:
             if result is None:

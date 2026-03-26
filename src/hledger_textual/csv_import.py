@@ -55,6 +55,23 @@ def get_rules_dir(journal_file: Path) -> Path:
     return rules_dir
 
 
+def find_companion_rules(csv_path: Path) -> Path | None:
+    """Return the companion rules file for *csv_path* if it exists.
+
+    Follows hledger's convention: the rules file for ``bank.csv`` is
+    ``bank.csv.rules`` in the same directory.  Returns ``None`` when no
+    such file is found.
+
+    Args:
+        csv_path: Path to the CSV file being imported.
+
+    Returns:
+        Path to the companion rules file, or ``None``.
+    """
+    companion = csv_path.parent / (csv_path.name + ".rules")
+    return companion if companion.is_file() else None
+
+
 def list_rules_files(rules_dir: Path) -> list[CsvRulesFile]:
     """Scan ``*.rules`` files in a directory and parse their metadata.
 
