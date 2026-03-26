@@ -214,6 +214,7 @@ class BudgetRule:
 
     account: str
     amount: Amount
+    category: str = ""
 
 
 @dataclass

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from textual import on, work
@@ -24,6 +25,7 @@ from hledger_textual.budget import (
     update_budget_rule,
 )
 from hledger_textual.cache import HledgerCache
+from hledger_textual.config import load_budget_alert_threshold
 from hledger_textual.hledger import HledgerError, load_budget_report
 from hledger_textual.models import BudgetRow, BudgetRule
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
@@ -44,6 +46,7 @@ class BudgetPane(DataTablePaneMixin, Widget):
         Binding("slash", "filter", "Filter", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("x", "export", "Export", show=False, priority=True),
+        Binding("o", "overview", "Overview", show=False, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("left,h", "prev_month", "Prev month", show=False, priority=True),
         Binding("right,l", "next_month", "Next month", show=False, priority=True),
@@ -67,6 +70,7 @@ class BudgetPane(DataTablePaneMixin, Widget):
         self._budget_rows: list[BudgetRow] = []
         self._current_month: date = date.today().replace(day=1)
         self.filter_text: str = ""
+        self._alerted_accounts: set[str] = set()
 
     def compose(self) -> ComposeResult:
         """Create the pane layout."""
@@ -130,7 +134,7 @@ class BudgetPane(DataTablePaneMixin, Widget):
         self.app.call_from_thread(self._update_table)
 
     def _update_table(self) -> None:
-        """Refresh the DataTable with current budget data."""
+        """Refresh the DataTable with current budget data, grouped by category."""
         table = self.query_one("#budget-table", DataTable)
         table.clear()
 
@@ -148,23 +152,35 @@ class BudgetPane(DataTablePaneMixin, Widget):
             row.account: row for row in self._budget_rows
         }
 
-        for rule in self._rules:
-            if self.filter_text and self.filter_text.lower() not in rule.account.lower():
-                continue
+        # Apply filter and group rules by category
+        visible = [
+            r for r in self._rules
+            if not self.filter_text or self.filter_text.lower() in r.account.lower()
+        ]
 
+        categorized: dict[str, list[BudgetRule]] = {}
+        uncategorized: list[BudgetRule] = []
+        for rule in visible:
+            if rule.category:
+                categorized.setdefault(rule.category, []).append(rule)
+            else:
+                uncategorized.append(rule)
+
+        has_categories = bool(categorized)
+        alert_threshold = load_budget_alert_threshold()
+
+        def _render_rule(rule: BudgetRule) -> None:
             budget_amount = rule.amount.quantity
             commodity = rule.amount.commodity
             report_row = actuals.get(rule.account)
 
-            actual_amount = report_row.actual if report_row else 0
+            actual_amount = report_row.actual if report_row else Decimal("0")
             remaining = budget_amount - actual_amount
             usage = float(actual_amount / budget_amount * 100) if budget_amount else 0.0
 
-            # Format values
             budget_str = f"{commodity}{budget_amount:.2f}"
             actual_str = f"{commodity}{actual_amount:.2f}"
 
-            # Color-coded remaining and usage
             if usage > 100:
                 remaining_str = f"[red]-{commodity}{abs(remaining):.2f}[/red]"
                 usage_str = f"[red]{usage:.0f}%[/red]"
@@ -184,15 +200,51 @@ class BudgetPane(DataTablePaneMixin, Widget):
                 key=rule.account,
             )
 
+            # Budget alerts
+            if (
+                alert_threshold is not None
+                and usage >= alert_threshold
+                and rule.account not in self._alerted_accounts
+            ):
+                self._alerted_accounts.add(rule.account)
+                self.notify(
+                    f"{rule.account}: {usage:.0f}% of budget used",
+                    severity="warning",
+                    timeout=6,
+                )
+
+        # Render categorized groups first (sorted by category name)
+        for cat in sorted(categorized):
+            table.add_row(
+                Text(f"\u2500\u2500 {cat} \u2500\u2500", style="dim bold"),
+                "", "", "", "",
+                key=f"__cat__{cat}",
+            )
+            for rule in categorized[cat]:
+                _render_rule(rule)
+
+        # Render uncategorized rules (no header when everything is uncategorized)
+        if uncategorized and has_categories:
+            table.add_row(
+                Text("\u2500\u2500 Other \u2500\u2500", style="dim bold"),
+                "", "", "", "",
+                key="__cat__other__",
+            )
+        for rule in uncategorized:
+            _render_rule(rule)
+
     def _get_selected_rule(self) -> BudgetRule | None:
-        """Return the BudgetRule for the currently highlighted row."""
+        """Return the BudgetRule for the currently highlighted row.
+
+        Returns ``None`` if the cursor is on a category header row.
+        """
         table = self.query_one("#budget-table", DataTable)
         if table.row_count == 0:
             return None
 
         row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
         account = row_key.value if row_key else None
-        if not account:
+        if not account or account.startswith("__cat__"):
             return None
 
         for rule in self._rules:
@@ -281,17 +333,26 @@ class BudgetPane(DataTablePaneMixin, Widget):
     def action_prev_month(self) -> None:
         """Navigate to the previous month."""
         self._current_month = _prev_month(self._current_month)
+        self._alerted_accounts.clear()
         self._load_budget_data()
 
     def action_next_month(self) -> None:
         """Navigate to the next month."""
         self._current_month = _next_month(self._current_month)
+        self._alerted_accounts.clear()
         self._load_budget_data()
 
     def action_today_month(self) -> None:
         """Jump to the current month."""
         self._current_month = date.today().replace(day=1)
+        self._alerted_accounts.clear()
         self._load_budget_data()
+
+    def action_overview(self) -> None:
+        """Open the multi-period budget overview screen."""
+        from hledger_textual.screens.budget_overview import BudgetOverviewScreen
+
+        self.app.push_screen(BudgetOverviewScreen(self.journal_file, self._rules))
 
     # --- Event handlers ---
 

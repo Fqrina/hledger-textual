@@ -226,6 +226,32 @@ def load_rules_dir() -> Path | None:
     return None
 
 
+def load_budget_alert_threshold() -> float | None:
+    """Return the configured budget alert threshold percentage, or ``None``.
+
+    Reads the ``[budget] alert_threshold`` key from config.toml.  When the key
+    is absent or invalid, returns ``None`` (alerts disabled).
+
+    Example config.toml entry::
+
+        [budget]
+        alert_threshold = 80
+
+    Returns:
+        A float in the range (0, 100] if configured, otherwise ``None``.
+    """
+    config = _load_config_dict()
+    budget_section = config.get("budget", {})
+    val = budget_section.get("alert_threshold") if isinstance(budget_section, dict) else None
+    if val is None:
+        return None
+    try:
+        threshold = float(val)
+        return threshold if 0 < threshold <= 100 else None
+    except (TypeError, ValueError):
+        return None
+
+
 def load_custom_reports() -> dict[str, str]:
     """Return saved custom reports from config.toml.
 

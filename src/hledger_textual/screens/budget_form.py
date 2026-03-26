@@ -77,6 +77,14 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
                     id="budget-input-commodity",
                 )
 
+            with Horizontal(classes="form-field"):
+                yield Label("Category:")
+                yield Input(
+                    value=self.rule.category if self.is_edit else "",
+                    placeholder="e.g. Fixed, Variable, Food (optional)",
+                    id="budget-input-category",
+                )
+
             with Horizontal(id="budget-form-buttons"):
                 yield Button("Cancel", variant="default", id="btn-budget-cancel")
                 yield Button("Save", variant="primary", id="btn-budget-save")
@@ -131,6 +139,8 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
         if not commodity:
             commodity = load_default_commodity()
 
+        category = self.query_one("#budget-input-category", Input).value.strip()
+
         style = AmountStyle(
             commodity_side="L",
             commodity_spaced=False,
@@ -145,5 +155,6 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
         rule = BudgetRule(
             account=account,
             amount=Amount(commodity=commodity, quantity=quantity, style=style),
+            category=category,
         )
         self.dismiss(rule)

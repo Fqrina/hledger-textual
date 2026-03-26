@@ -21,7 +21,7 @@ BUDGET_FILENAME = "budget.journal"
 
 _INCLUDE_RE = re.compile(r"^\s*include\s+budget\.journal\s*$", re.MULTILINE)
 _PERIODIC_RE = re.compile(r"^~\s+monthly\s*$")
-_POSTING_RE = re.compile(r"^\s{4,}(\S.+?)\s{2,}(\S+)\s*$")
+_POSTING_RE = re.compile(r"^\s{4,}(\S.+?)\s{2,}(\S+)\s*(?:;\s*category:\s*(.+?))?\s*$")
 _BALANCING_RE = re.compile(r"^\s{4,}(Assets:Budget)\s*$")
 
 
@@ -110,6 +110,7 @@ def parse_budget_rules(budget_path: Path) -> list[BudgetRule]:
             if posting_match:
                 account = posting_match.group(1).strip()
                 amount_str = posting_match.group(2).strip()
+                category = (posting_match.group(3) or "").strip()
                 quantity, commodity = _parse_amount_string(amount_str)
                 style = AmountStyle(
                     commodity_side="L",
@@ -119,6 +120,7 @@ def parse_budget_rules(budget_path: Path) -> list[BudgetRule]:
                 rules.append(BudgetRule(
                     account=account,
                     amount=Amount(commodity=commodity, quantity=quantity, style=style),
+                    category=category,
                 ))
 
     return rules
@@ -144,7 +146,10 @@ def _format_budget_file(rules: list[BudgetRule]) -> str:
     for rule in rules:
         amount_str = rule.amount.format()
         padding = " " * (account_width - len(rule.account))
-        lines.append(f"    {rule.account}{padding}{amount_str}")
+        if rule.category:
+            lines.append(f"    {rule.account}{padding}{amount_str}  ; category: {rule.category}")
+        else:
+            lines.append(f"    {rule.account}{padding}{amount_str}")
 
     lines.append("    Assets:Budget")
     lines.append("")
