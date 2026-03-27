@@ -11,7 +11,6 @@ from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Select
 
 from hledger_textual.models import ReportData, ReportRow
-from hledger_textual.widgets.report_chart import ReportChart
 from hledger_textual.widgets.reports_pane import ReportsPane
 from tests.conftest import has_hledger
 
@@ -195,13 +194,14 @@ class TestReportsPaneErrors:
 
 
 class TestReportsPaneChart:
-    """Tests for chart toggle and update in ReportsPane."""
+    """Tests for chart modal in ReportsPane."""
 
-    async def test_c_key_toggles_chart_visibility(
+    async def test_c_key_opens_chart_modal(
         self, reports_journal: Path, monkeypatch
     ):
-        """Pressing c toggles the chart's visible CSS class."""
+        """Pressing c opens the ReportChartModal."""
         from hledger_textual.hledger import _parse_report_csv
+        from hledger_textual.screens.report_chart_modal import ReportChartModal
 
         data = _parse_report_csv(_SAMPLE_IS_CSV)
         monkeypatch.setattr(
@@ -211,36 +211,34 @@ class TestReportsPaneChart:
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=0.5)
-            chart = app.query_one("#report-chart", ReportChart)
-            assert not chart.has_class("visible")
-
             pane = app.query_one(ReportsPane)
             pane.focus()
             await pilot.press("c")
             await pilot.pause()
-            assert chart.has_class("visible")
-
-            await pilot.press("c")
+            assert isinstance(app.screen, ReportChartModal)
+            await pilot.press("escape")
             await pilot.pause()
-            assert not chart.has_class("visible")
+            assert not isinstance(app.screen, ReportChartModal)
 
-    async def test_chart_updates_on_report_load(
+    async def test_c_key_does_nothing_without_data(
         self, reports_journal: Path, monkeypatch
     ):
-        """Chart is updated when report data loads."""
-        from hledger_textual.hledger import _parse_report_csv
+        """Pressing c shows a warning when no report data is loaded."""
+        from hledger_textual.hledger import HledgerError
+        from hledger_textual.screens.report_chart_modal import ReportChartModal
 
-        data = _parse_report_csv(_SAMPLE_IS_CSV)
-        monkeypatch.setattr(
-            "hledger_textual.widgets.reports_pane.load_report",
-            lambda *args, **kwargs: data,
-        )
+        def _raise(*args, **kwargs):
+            raise HledgerError("no data")
+
+        monkeypatch.setattr("hledger_textual.widgets.reports_pane.load_report", _raise)
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=0.5)
-            chart = app.query_one("#report-chart", ReportChart)
-            # Chart should exist and have been replotted (no crash)
-            assert chart is not None
+            pane = app.query_one(ReportsPane)
+            pane.focus()
+            await pilot.press("c")
+            await pilot.pause()
+            assert not isinstance(app.screen, ReportChartModal)
 
 
 _SAMPLE_INV_CSV = (
