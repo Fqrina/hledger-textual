@@ -6,18 +6,16 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Label, Static
+from textual.widgets import DataTable, Label, Select, Static
 from textual.containers import Vertical
 
 from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.hledger import HledgerError, load_multi_period_budget_report
 from hledger_textual.models import BudgetRule
-
-
-_NUM_PERIODS = 6
 
 
 def _months_range(end: date, n: int) -> tuple[str, str]:
@@ -57,11 +55,18 @@ class BudgetOverviewScreen(ModalScreen[None]):
         super().__init__()
         self.journal_file = journal_file
         self._rules = rules
+        self._num_periods: int = 3
 
     def compose(self) -> ComposeResult:
         """Create the screen layout."""
         with Vertical(id="budget-overview-dialog"):
-            yield Label("Budget Overview — last 6 months", id="budget-overview-title")
+            yield Label("Budget Overview", id="budget-overview-title")
+            yield Select(
+                [("3 months", 3), ("6 months", 6), ("12 months", 12)],
+                value=3,
+                allow_blank=False,
+                id="budget-overview-periods",
+            )
             yield Static("", id="budget-overview-status")
             yield DataTable(id="budget-overview-table")
 
@@ -72,28 +77,29 @@ class BudgetOverviewScreen(ModalScreen[None]):
         table.show_cursor = False
         self._load_data()
 
+    @on(Select.Changed, "#budget-overview-periods")
+    def on_period_changed(self, event: Select.Changed) -> None:
+        """Reload data when the period selection changes."""
+        self._num_periods = int(event.value)
+        self._load_data()
+
+    @work(thread=True, exclusive=True)
     def _load_data(self) -> None:
         """Load multi-period budget data and populate the table."""
-        from textual import work
+        end = date.today().replace(day=1)
+        start_str, end_str = _months_range(end, self._num_periods)
+        try:
+            periods, rows = load_multi_period_budget_report(
+                self.journal_file, start_str, end_str
+            )
+        except HledgerError as exc:
+            self.app.call_from_thread(self._show_load_error, str(exc))
+            return
+        self.app.call_from_thread(self._populate_table, periods, rows)
 
-        @work(thread=True)
-        async def _fetch() -> None:
-            end = date.today().replace(day=1)
-            start_str, end_str = _months_range(end, _NUM_PERIODS)
-            try:
-                periods, rows = load_multi_period_budget_report(
-                    self.journal_file, start_str, end_str
-                )
-            except HledgerError as exc:
-                self.app.call_from_thread(
-                    self.query_one("#budget-overview-status", Static).update,
-                    f"[red]Error: {exc}[/red]",
-                )
-                return
-
-            self.app.call_from_thread(self._populate_table, periods, rows)
-
-        _fetch(self)
+    def _show_load_error(self, msg: str) -> None:
+        """Display an error message in the status label."""
+        self.query_one("#budget-overview-status", Static).update(f"[red]Error: {msg}[/red]")
 
     def _populate_table(
         self,
@@ -112,10 +118,11 @@ class BudgetOverviewScreen(ModalScreen[None]):
         table = self.query_one("#budget-overview-table", DataTable)
         table.clear(columns=True)
 
+        status = self.query_one("#budget-overview-status", Static)
+        status.update("")
+
         if not periods or not rows:
-            self.query_one("#budget-overview-status", Static).update(
-                "[dim]No budget data available for this range.[/dim]"
-            )
+            status.update("[dim]No budget data available for this range.[/dim]")
             return
 
         # Add columns: Account + one per period

@@ -46,7 +46,7 @@ class BudgetPane(DataTablePaneMixin, Widget):
         Binding("slash", "filter", "Filter", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("x", "export", "Export", show=False, priority=True),
-        Binding("o", "overview", "Overview", show=False, priority=True),
+        Binding("o", "overview", "Overview", show=True, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("left,h", "prev_month", "Prev month", show=False, priority=True),
         Binding("right,l", "next_month", "Next month", show=False, priority=True),

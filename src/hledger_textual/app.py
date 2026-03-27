@@ -37,7 +37,7 @@ def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
         "summary": f"\\[r] Reload  {global_no_export}",
         "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {global_part}",
         "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {global_part}",
-        "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  {global_part}",
+        "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  \\[o] Overview  {global_part}",
         "reports": f"\\[n] New  \\[c] Chart  \\[i] Inv  \\[r] Reload  {global_part}",
         "reports-custom": f"\\[esc] Back  \\[n] New  \\[e] Edit  \\[d] Del  \\[r] Reload  {global_part}",
         "recurring": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[g] Generate  \\[r] Reload  {global_part}",
