@@ -154,6 +154,10 @@ class TransactionsTable(Widget):
         table.add_column("Description", width=20)
         table.add_column("Accounts", width=20)
         table.add_column("Amount", width=self._TXN_FIXED[5])
+        table.add_row(
+            Text("Loading transactions…", style="dim italic"),
+            "", "", "", "", "",
+        )
         self._load_transactions()
         table.focus()
 
