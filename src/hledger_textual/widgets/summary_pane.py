@@ -10,6 +10,7 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from rich.text import Text
 from textual.widgets import DataTable, Static
@@ -324,8 +325,13 @@ class SummaryPane(Widget):
         """Apply card values, basic investments, and liabilities."""
         if not self.is_attached:
             return
-        # Static overview title (all-time data)
-        self.query_one("#summary-overview-title", Static).update("Overview")
+        # Guard against the widget being unmounted between the is_attached check
+        # and the DOM query (can happen when a background worker completes after
+        # the app has started tearing down during tests).
+        try:
+            self.query_one("#summary-overview-title", Static).update("Overview")
+        except NoMatches:
+            return
 
         # Income / Expenses / Net cards — delegated to PeriodSummaryCards
         self.query_one(PeriodSummaryCards).update_summary(summary)

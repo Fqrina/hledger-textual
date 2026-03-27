@@ -81,6 +81,52 @@ class TestParseBudgetRules:
         accounts = [r.account for r in rules]
         assert "Assets:Budget" not in accounts
 
+    def test_parse_header_with_from_date(self, tmp_path: Path):
+        """Parses rules from a periodic header with a 'from' date modifier."""
+        content = (
+            "~ monthly from 2023-01-01\n"
+            "    Expenses:Rent                               €800.00\n"
+            "    Assets:Budget\n"
+        )
+        budget_file = tmp_path / "budget.journal"
+        budget_file.write_text(content)
+        rules = parse_budget_rules(budget_file)
+        assert len(rules) == 1
+        assert rules[0].account == "Expenses:Rent"
+        assert rules[0].amount.quantity == Decimal("800.00")
+
+    def test_parse_header_with_from_and_to_dates(self, tmp_path: Path):
+        """Parses rules from a periodic header with both 'from' and 'to' modifiers."""
+        content = (
+            "~ monthly from 2023-04-15 to 2023-06-16\n"
+            "    Expenses:Utilities                          $400.00\n"
+            "    Assets:Budget\n"
+        )
+        budget_file = tmp_path / "budget.journal"
+        budget_file.write_text(content)
+        rules = parse_budget_rules(budget_file)
+        assert len(rules) == 1
+        assert rules[0].account == "Expenses:Utilities"
+        assert rules[0].amount.quantity == Decimal("400.00")
+
+    def test_parse_multiple_blocks_mixed_headers(self, tmp_path: Path):
+        """Parses rules from both bare and date-qualified periodic headers."""
+        content = (
+            "~ monthly\n"
+            "    Expenses:Groceries                          €400.00\n"
+            "    Assets:Budget\n"
+            "\n"
+            "~ monthly from 2024-01-01\n"
+            "    Expenses:Rent                               €800.00\n"
+            "    Assets:Budget\n"
+        )
+        budget_file = tmp_path / "budget.journal"
+        budget_file.write_text(content)
+        rules = parse_budget_rules(budget_file)
+        accounts = [r.account for r in rules]
+        assert "Expenses:Groceries" in accounts
+        assert "Expenses:Rent" in accounts
+
 
 class TestEnsureBudgetFile:
     """Tests for ensure_budget_file."""
@@ -243,3 +289,111 @@ class TestBudgetCRUD:
         budget_path = tmp_journal_with_budget.parent / "budget.journal"
         with pytest.raises(BudgetError, match="No budget rule found"):
             delete_budget_rule(budget_path, "Expenses:Nope", tmp_journal_with_budget)
+
+
+class TestBudgetRuleCategory:
+    """Tests for category field on BudgetRule (parse, format, roundtrip)."""
+
+    def test_parse_rule_with_category(self, tmp_path: Path):
+        """Parses category from inline posting comment."""
+        content = (
+            "~ monthly\n"
+            "    Expenses:Rent                               €800.00  ; category: Fixed\n"
+            "    Expenses:Groceries                          €400.00  ; category: Food\n"
+            "    Assets:Budget\n"
+        )
+        budget_file = tmp_path / "budget.journal"
+        budget_file.write_text(content)
+        rules = parse_budget_rules(budget_file)
+        assert len(rules) == 2
+        assert rules[0].category == "Fixed"
+        assert rules[1].category == "Food"
+
+    def test_parse_rule_without_category(self, tmp_path: Path):
+        """Rules without category comment get empty string category."""
+        content = (
+            "~ monthly\n"
+            "    Expenses:Groceries                          €800.00\n"
+            "    Assets:Budget\n"
+        )
+        budget_file = tmp_path / "budget.journal"
+        budget_file.write_text(content)
+        rules = parse_budget_rules(budget_file)
+        assert len(rules) == 1
+        assert rules[0].category == ""
+
+    def test_format_rule_with_category(self, euro_style: AmountStyle):
+        """Formats rule with category as inline posting comment."""
+        rule = BudgetRule(
+            account="Expenses:Rent",
+            amount=Amount(commodity="€", quantity=Decimal("800.00"), style=euro_style),
+            category="Fixed",
+        )
+        content = _format_budget_file([rule])
+        assert "; category: Fixed" in content
+
+    def test_format_rule_without_category(self, euro_style: AmountStyle):
+        """Formats rule without category — no comment appended."""
+        rule = BudgetRule(
+            account="Expenses:Groceries",
+            amount=Amount(commodity="€", quantity=Decimal("400.00"), style=euro_style),
+        )
+        content = _format_budget_file([rule])
+        assert "; category:" not in content
+
+    def test_category_roundtrip(self, tmp_path: Path, euro_style: AmountStyle):
+        """Category survives a format → write → parse roundtrip."""
+        rules = [
+            BudgetRule(
+                account="Expenses:Rent",
+                amount=Amount(commodity="€", quantity=Decimal("800.00"), style=euro_style),
+                category="Fixed",
+            ),
+            BudgetRule(
+                account="Expenses:Groceries",
+                amount=Amount(commodity="€", quantity=Decimal("400.00"), style=euro_style),
+                category="Food",
+            ),
+            BudgetRule(
+                account="Expenses:Other",
+                amount=Amount(commodity="€", quantity=Decimal("50.00"), style=euro_style),
+            ),
+        ]
+        budget_file = tmp_path / "budget.journal"
+        budget_file.write_text(_format_budget_file(rules))
+        reparsed = parse_budget_rules(budget_file)
+        assert reparsed[0].category == "Fixed"
+        assert reparsed[1].category == "Food"
+        assert reparsed[2].category == ""
+
+
+class TestBudgetAlertThreshold:
+    """Tests for load_budget_alert_threshold config helper."""
+
+    def test_returns_none_when_absent(self, tmp_path: Path, monkeypatch):
+        """Returns None when [budget] alert_threshold is not configured."""
+        from hledger_textual import config as cfg
+        monkeypatch.setattr(cfg, "_load_config_dict", lambda: {})
+        from hledger_textual.config import load_budget_alert_threshold
+        assert load_budget_alert_threshold() is None
+
+    def test_returns_float_when_configured(self, monkeypatch):
+        """Returns the configured threshold as a float."""
+        from hledger_textual import config as cfg
+        monkeypatch.setattr(cfg, "_load_config_dict", lambda: {"budget": {"alert_threshold": 80}})
+        from hledger_textual.config import load_budget_alert_threshold
+        assert load_budget_alert_threshold() == 80.0
+
+    def test_returns_none_for_invalid_value(self, monkeypatch):
+        """Returns None for non-numeric values."""
+        from hledger_textual import config as cfg
+        monkeypatch.setattr(cfg, "_load_config_dict", lambda: {"budget": {"alert_threshold": "bad"}})
+        from hledger_textual.config import load_budget_alert_threshold
+        assert load_budget_alert_threshold() is None
+
+    def test_returns_none_for_zero(self, monkeypatch):
+        """Returns None for threshold of 0 (out of valid range)."""
+        from hledger_textual import config as cfg
+        monkeypatch.setattr(cfg, "_load_config_dict", lambda: {"budget": {"alert_threshold": 0}})
+        from hledger_textual.config import load_budget_alert_threshold
+        assert load_budget_alert_threshold() is None

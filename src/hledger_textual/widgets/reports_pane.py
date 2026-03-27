@@ -28,7 +28,7 @@ from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.formatting import fmt_amount_str
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
-from hledger_textual.widgets.report_chart import ReportChart, extract_chart_data
+from hledger_textual.widgets.report_chart import extract_chart_data
 
 _ONLY_SEPS = re.compile(r'^[\s=\-\+\|]+$')
 _STANDALONE_ZERO = re.compile(r'(?<![\d.])0(?![\d.])')
@@ -229,7 +229,6 @@ class ReportsPane(DataTablePaneMixin, Widget):
 
         yield Static("", id="report-context-bar")
         yield DataTable(id="reports-table")
-        yield ReportChart(id="report-chart")
         with VerticalScroll(id="custom-report-output"):
             yield Static("", id="custom-report-text")
 
@@ -291,18 +290,14 @@ class ReportsPane(DataTablePaneMixin, Widget):
                 built-in DataTable view.
         """
         table = self.query_one("#reports-table", DataTable)
-        chart = self.query_one("#report-chart", ReportChart)
         output = self.query_one("#custom-report-output", VerticalScroll)
         period_select = self.query_one("#report-period-select", Select)
-
         type_select = self.query_one("#report-type-select", Select)
 
         table.display = not active
         output.display = active
         type_select.display = not active
         period_select.display = not active
-        if active:
-            chart.display = False
 
         self.post_message(self.CustomReportStateChanged(active))
 
@@ -478,22 +473,28 @@ class ReportsPane(DataTablePaneMixin, Widget):
             distribute_column_widths(table, self._fixed_widths)
 
         self._update_context_bar_builtin()
-        self._update_chart()
-
-    def _update_chart(self) -> None:
-        """Extract chart data from the current report and replot."""
-        chart = self.query_one("#report-chart", ReportChart)
-        chart_data = extract_chart_data(self._report_data, self._report_type)
-        chart.replot(chart_data, self._report_type)
 
     # --- Actions ---
 
     def action_toggle_chart(self) -> None:
-        """Toggle chart visibility."""
+        """Open the chart dialog for the current report."""
         if self._custom_report_name is not None:
             return
-        chart = self.query_one("#report-chart", ReportChart)
-        chart.toggle_class("visible")
+        if not self._report_data:
+            self.notify("No data to chart yet", severity="warning", timeout=3)
+            return
+
+        from hledger_textual.screens.report_chart_modal import ReportChartModal
+
+        chart_data = extract_chart_data(self._report_data, self._report_type)
+        if not chart_data:
+            self.notify("No chart data available for this report", severity="warning", timeout=3)
+            return
+
+        report_label = _REPORT_LABELS.get(self._report_type, self._report_type)
+        period_label = _PERIOD_LABELS.get(self._period_months, "")
+        title = f"{report_label}  ·  {period_label}"
+        self.app.push_screen(ReportChartModal(chart_data, self._report_type, title))
 
     def action_toggle_investments(self) -> None:
         """Toggle the Investments section on the Income Statement."""

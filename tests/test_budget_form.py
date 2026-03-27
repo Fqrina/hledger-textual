@@ -212,3 +212,57 @@ class TestBudgetFormEditMode:
             saved = app.results[0]
             assert saved.account == "Expenses:Groceries"
             assert saved.amount.quantity == Decimal("900.00")
+
+    async def test_edit_form_prefills_category(self, tmp_path: Path, euro_style):
+        """Edit form pre-fills the category field from the existing rule."""
+        rule = BudgetRule(
+            account="Expenses:Groceries",
+            amount=Amount(commodity="€", quantity=Decimal("800.00"), style=euro_style),
+            category="Food",
+        )
+        app = _FormApp(tmp_path / "test.journal", rule=rule)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+            assert form.query_one("#budget-input-category", Input).value == "Food"
+
+
+class TestBudgetFormCategory:
+    """Tests for the Category field in BudgetFormScreen."""
+
+    async def test_new_form_category_empty_by_default(self, tmp_path: Path):
+        """New rule form has empty category field."""
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+            assert form.query_one("#budget-input-category", Input).value == ""
+
+    async def test_category_saved_with_rule(self, tmp_path: Path):
+        """Category value is included in the returned BudgetRule."""
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+            form.query_one("#budget-input-account", Input).value = "Expenses:Rent"
+            form.query_one("#budget-input-amount", Input).value = "800.00"
+            form.query_one("#budget-input-commodity", Input).value = "€"
+            form.query_one("#budget-input-category", Input).value = "Fixed"
+            await pilot.click(form.query_one("#btn-budget-save"))
+            await pilot.pause()
+            assert len(app.results) == 1
+            assert app.results[0].category == "Fixed"
+
+    async def test_empty_category_saves_as_empty_string(self, tmp_path: Path):
+        """Leaving category blank saves an empty string (not None)."""
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+            form.query_one("#budget-input-account", Input).value = "Expenses:Food"
+            form.query_one("#budget-input-amount", Input).value = "200.00"
+            form.query_one("#budget-input-commodity", Input).value = "€"
+            await pilot.click(form.query_one("#btn-budget-save"))
+            await pilot.pause()
+            assert len(app.results) == 1
+            assert app.results[0].category == ""

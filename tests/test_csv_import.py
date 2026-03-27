@@ -17,6 +17,7 @@ from hledger_textual.csv_import import (
     detect_date_format,
     detect_header_row,
     detect_separator,
+    find_companion_rules,
     generate_rules_content,
     get_rules_dir,
     list_rules_files,
@@ -289,6 +290,40 @@ class TestListRulesFiles:
     def test_nonexistent_dir(self, tmp_path: Path) -> None:
         """Nonexistent directory should return empty list."""
         assert list_rules_files(tmp_path / "nope") == []
+
+
+class TestFindCompanionRules:
+    """Tests for find_companion_rules."""
+
+    def test_companion_found(self, tmp_path: Path) -> None:
+        """Returns path when bank.csv.rules exists next to bank.csv."""
+        csv_file = tmp_path / "bank.csv"
+        csv_file.write_text("date,amount\n")
+        rules_file = tmp_path / "bank.csv.rules"
+        rules_file.write_text("; rules\n")
+        assert find_companion_rules(csv_file) == rules_file
+
+    def test_companion_not_found(self, tmp_path: Path) -> None:
+        """Returns None when no companion rules file exists."""
+        csv_file = tmp_path / "bank.csv"
+        csv_file.write_text("date,amount\n")
+        assert find_companion_rules(csv_file) is None
+
+    def test_ignores_rules_without_csv_infix(self, tmp_path: Path) -> None:
+        """bank.rules without the .csv infix is not a companion."""
+        csv_file = tmp_path / "bank.csv"
+        csv_file.write_text("date,amount\n")
+        (tmp_path / "bank.rules").write_text("; rules\n")
+        assert find_companion_rules(csv_file) is None
+
+    def test_companion_in_same_directory(self, tmp_path: Path) -> None:
+        """Companion file must live in the same directory as the CSV."""
+        subdir = tmp_path / "sub"
+        subdir.mkdir()
+        csv_file = subdir / "export.csv"
+        csv_file.write_text("date,amount\n")
+        (tmp_path / "export.csv.rules").write_text("; rules\n")  # wrong dir
+        assert find_companion_rules(csv_file) is None
 
 
 class TestGetRulesDir:

@@ -671,6 +671,104 @@ def load_budget_report(
     return rows
 
 
+def load_multi_period_budget_report(
+    file: str | Path,
+    start: str,
+    end: str,
+) -> tuple[list[str], dict[str, list[BudgetRow]]]:
+    """Load budget vs actual data for multiple months side-by-side.
+
+    Runs ``hledger balance --budget -p START..END -M -O csv`` and parses the
+    CSV output into per-account, per-period rows.
+
+    Args:
+        file: Path to the journal file.
+        start: First month in ``YYYY-MM`` format (inclusive).
+        end: Last month in ``YYYY-MM`` format (inclusive).
+
+    Returns:
+        A tuple of:
+        - ``periods``: ordered list of period labels as returned by hledger
+          (e.g. ``["2025-10", "2025-11", "2026-03"]``).
+        - ``rows``: dict mapping account name → list of :class:`BudgetRow`
+          with one entry per period (same order as ``periods``).
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger(
+        "balance", "--budget", "-p", f"{start}..{end}", "-M", "-O", "csv",
+        "--no-total", "Expenses",
+        file=file,
+    )
+
+    if not output.strip():
+        return [], {}
+
+    reader = csv.reader(io.StringIO(output))
+    header = next(reader, None)
+    if not header or len(header) < 2:
+        return [], {}
+
+    # Header row: ["Account", "2025-10", "2025-10 budget", "2025-11", ...]
+    # Identify period labels (skip "Account" and "* budget" columns).
+    periods: list[str] = []
+    period_indices: list[int] = []
+    budget_indices: list[int] = []
+    for i, col in enumerate(header):
+        col = col.strip().strip('"')
+        if i == 0:
+            continue
+        if col.endswith(" budget"):
+            budget_indices.append(i)
+        else:
+            periods.append(col)
+            period_indices.append(i)
+
+    rows: dict[str, list[BudgetRow]] = {}
+    for row in reader:
+        if not row or not row[0]:
+            continue
+        account = row[0].strip().strip('"')
+        budget_rows: list[BudgetRow] = []
+
+        for idx, period in zip(period_indices, periods):
+            actual = Decimal("0")
+            budget = Decimal("0")
+            commodity = ""
+
+            if idx < len(row):
+                cell = row[idx].strip().strip('"')
+                if "=" in cell:
+                    parts = cell.split("=")
+                    actual_str = parts[0].strip().rstrip("[").strip()
+                    budget_str = parts[1].strip().rstrip("]").strip()
+                    actual, commodity = _parse_budget_amount(actual_str)
+                    budget, _ = _parse_budget_amount(budget_str)
+                elif cell:
+                    actual, commodity = _parse_budget_amount(cell)
+
+            # Try dedicated budget column if no inline budget yet
+            if not budget and budget_indices:
+                b_idx = budget_indices[period_indices.index(idx)] if idx in period_indices else -1
+                if b_idx != -1 and b_idx < len(row):
+                    budget_cell = row[b_idx].strip().strip('"')
+                    budget, bcom = _parse_budget_amount(budget_cell)
+                    if not commodity:
+                        commodity = bcom
+
+            budget_rows.append(BudgetRow(
+                account=account,
+                actual=actual,
+                budget=budget,
+                commodity=commodity,
+            ))
+
+        rows[account] = budget_rows
+
+    return periods, rows
+
+
 def load_journal_stats(file: str | Path) -> JournalStats:
     """Load journal statistics (transaction count, account count, commodities).
 
