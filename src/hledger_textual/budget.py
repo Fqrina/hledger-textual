@@ -20,7 +20,7 @@ from hledger_textual.models import Amount, AmountStyle, BudgetRule
 BUDGET_FILENAME = "budget.journal"
 
 _INCLUDE_RE = re.compile(r"^\s*include\s+budget\.journal\s*$", re.MULTILINE)
-_PERIODIC_RE = re.compile(r"^~\s+monthly\s*$")
+_PERIODIC_RE = re.compile(r"^~\s+monthly\b")
 _POSTING_RE = re.compile(r"^\s{4,}(\S.+?)\s{2,}(\S+)\s*(?:;\s*category:\s*(.+?))?\s*$")
 _BALANCING_RE = re.compile(r"^\s{4,}(Assets:Budget)\s*$")
 
