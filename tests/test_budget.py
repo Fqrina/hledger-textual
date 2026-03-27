@@ -81,6 +81,52 @@ class TestParseBudgetRules:
         accounts = [r.account for r in rules]
         assert "Assets:Budget" not in accounts
 
+    def test_parse_header_with_from_date(self, tmp_path: Path):
+        """Parses rules from a periodic header with a 'from' date modifier."""
+        content = (
+            "~ monthly from 2023-01-01\n"
+            "    Expenses:Rent                               €800.00\n"
+            "    Assets:Budget\n"
+        )
+        budget_file = tmp_path / "budget.journal"
+        budget_file.write_text(content)
+        rules = parse_budget_rules(budget_file)
+        assert len(rules) == 1
+        assert rules[0].account == "Expenses:Rent"
+        assert rules[0].amount.quantity == Decimal("800.00")
+
+    def test_parse_header_with_from_and_to_dates(self, tmp_path: Path):
+        """Parses rules from a periodic header with both 'from' and 'to' modifiers."""
+        content = (
+            "~ monthly from 2023-04-15 to 2023-06-16\n"
+            "    Expenses:Utilities                          $400.00\n"
+            "    Assets:Budget\n"
+        )
+        budget_file = tmp_path / "budget.journal"
+        budget_file.write_text(content)
+        rules = parse_budget_rules(budget_file)
+        assert len(rules) == 1
+        assert rules[0].account == "Expenses:Utilities"
+        assert rules[0].amount.quantity == Decimal("400.00")
+
+    def test_parse_multiple_blocks_mixed_headers(self, tmp_path: Path):
+        """Parses rules from both bare and date-qualified periodic headers."""
+        content = (
+            "~ monthly\n"
+            "    Expenses:Groceries                          €400.00\n"
+            "    Assets:Budget\n"
+            "\n"
+            "~ monthly from 2024-01-01\n"
+            "    Expenses:Rent                               €800.00\n"
+            "    Assets:Budget\n"
+        )
+        budget_file = tmp_path / "budget.journal"
+        budget_file.write_text(content)
+        rules = parse_budget_rules(budget_file)
+        accounts = [r.account for r in rules]
+        assert "Expenses:Groceries" in accounts
+        assert "Expenses:Rent" in accounts
+
 
 class TestEnsureBudgetFile:
     """Tests for ensure_budget_file."""
