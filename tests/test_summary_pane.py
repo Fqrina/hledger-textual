@@ -14,7 +14,6 @@ from textual.widgets import DataTable, Digits, Static
 from hledger_textual.widgets.formatting import (
     compute_saving_rate,
     fmt_amount,
-    fmt_digits,
 )
 from hledger_textual.widgets.summary_pane import (
     SummaryPane,
@@ -84,25 +83,6 @@ class TestFmtAmount:
         """Without a commodity, only the number is returned."""
         assert fmt_amount(Decimal("42.00"), "") == "42.00"
 
-
-class TestFmtDigits:
-    """Tests for fmt_digits helper (Digits-compatible formatting)."""
-
-    def test_replaces_commas_with_spaces(self):
-        """Commas are replaced with spaces for Digits widget compatibility."""
-        assert fmt_digits(Decimal("1234.56"), "€") == "€1 234.56"
-
-    def test_no_separator_passthrough(self):
-        """Small amounts without thousands separators pass through unchanged."""
-        assert fmt_digits(Decimal("42.00"), "€") == "€42.00"
-
-    def test_right_code(self):
-        """Multi-char commodity codes work correctly."""
-        assert fmt_digits(Decimal("1000.00"), "EUR") == "1 000.00 EUR"
-
-    def test_no_commodity(self):
-        """Without a commodity, only the number is returned."""
-        assert fmt_digits(Decimal("1234.00"), "") == "1 234.00"
 
 
 class TestProgressBar:
@@ -290,7 +270,7 @@ class TestSummaryPaneCards:
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
             income_widget = app.query_one(".income-value", Digits)
-            assert "3 000" in income_widget.value
+            assert "3,000" in income_widget.value
 
     async def test_cards_show_expenses_after_load(self, summary_journal: Path):
         """After loading, the expenses card shows the expected amount."""

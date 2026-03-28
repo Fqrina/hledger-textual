@@ -35,8 +35,8 @@ class TestPeriodSummaryCardsCompose:
         async with app.run_test() as pilot:
             await pilot.pause()
             cards = app.query_one(PeriodSummaryCards)
-            digits = cards.query(Digits)
-            assert len(digits) == 3
+            displays = cards.query(Digits)
+            assert len(displays) == 3
 
     async def test_compose_has_expected_classes(self):
         """The three Digits widgets have the expected CSS classes."""
@@ -85,13 +85,13 @@ class TestPeriodSummaryCardsUpdate:
             await pilot.pause()
 
             income = cards.query_one(".income-value", Digits)
-            assert "3 000" in income.value
+            assert "3,000" in income.value
 
             expenses = cards.query_one(".expenses-value", Digits)
-            assert "1 200" in expenses.value
+            assert "1,200" in expenses.value
 
             net = cards.query_one(".net-value", Digits)
-            assert "1 800" in net.value
+            assert "1,800" in net.value
             assert net.has_class("net-positive")
             assert not net.has_class("net-negative")
 

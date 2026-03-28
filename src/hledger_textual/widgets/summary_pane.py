@@ -22,7 +22,6 @@ from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.formatting import (
     compute_saving_rate,
     fmt_amount,
-    fmt_digits,
 )
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.hledger import (

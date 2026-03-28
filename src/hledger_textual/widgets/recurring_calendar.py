@@ -14,6 +14,7 @@ from textual.widgets import Static
 
 from hledger_textual.hledger import HledgerError, load_transactions
 from hledger_textual.models import RecurringRule
+from hledger_textual.widgets.formatting import fmt_amount_str
 from hledger_textual.recurring import (
     SUPPORTED_PERIODS,
     _generate_occurrences,
@@ -37,7 +38,7 @@ class CalendarEntry:
         """Return the first posting amount formatted for display."""
         for posting in self.rule.postings:
             if posting.amounts:
-                return posting.amounts[0].format()
+                return fmt_amount_str(posting.amounts[0].format())
         return ""
 
 

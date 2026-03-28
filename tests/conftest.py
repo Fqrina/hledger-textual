@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -19,6 +20,16 @@ from hledger_textual.models import (
 )
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def _fixed_number_locale():
+    """Force en_US locale for all tests to get predictable amount formatting."""
+    from hledger_textual.widgets.formatting import _number_locale
+    _number_locale.cache_clear()
+    with patch("hledger_textual.config.load_number_locale", return_value="en_US"):
+        yield
+    _number_locale.cache_clear()
 
 
 @pytest.fixture

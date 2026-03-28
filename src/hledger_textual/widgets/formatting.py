@@ -6,11 +6,11 @@ import re
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 
-from babel.numbers import format_decimal, get_decimal_symbol, get_group_symbol
+from babel.numbers import format_decimal
 
-# Matches left-side currency symbol amounts with 3+ decimal places.
-# Handles both €-2442.140 (symbol before minus) and -€1.730 (minus before symbol).
-_FMT_STR_RE = re.compile(r"^(-?)([€$£¥₿₹])(-?)([\d,]+\.\d{3,})$")
+# Matches left-side currency symbol amounts with 2+ decimal places.
+# Handles both €-2442.14 (symbol before minus) and -€1.73 (minus before symbol).
+_FMT_STR_RE = re.compile(r"^(-?)([€$£¥₿₹])(-?)([\d,]+\.\d{2,})$")
 
 
 @lru_cache(maxsize=1)
@@ -23,10 +23,11 @@ def _number_locale() -> str:
 def fmt_amount_str(s: str) -> str:
     """Round a hledger amount string to 2 decimal places and apply locale formatting.
 
-    Only affects amounts with a left-side currency symbol (€, $, etc.) that
-    have more than 2 decimal places.  Named-commodity amounts (``164 XEON``,
-    ``2.00 XDWD``), plain integers, and amounts already at ≤ 2 decimal places
-    are returned unchanged.
+    Applies locale formatting to any amount with a left-side currency symbol
+    (€, $, etc.) that has 2 or more decimal places — adding the configured
+    thousands separator and normalising to 2 decimal places.  Named-commodity
+    amounts (``164 XEON``, ``2.00 XDWD``) and plain integers are returned
+    unchanged.
 
     Handles both ``€-2442.140`` (symbol before minus) and ``-€1.730``
     (minus before symbol) formats.
@@ -70,35 +71,6 @@ def fmt_amount(qty: Decimal, commodity: str) -> str:
         return f"{commodity}{formatted}"
     return f"{formatted} {commodity}"
 
-
-def fmt_digits(qty: Decimal, commodity: str) -> str:
-    """Format a decimal amount for the Textual Digits widget.
-
-    The Digits widget only supports ``0-9``, ``.``, ``:``, ``-``, and space.
-    This function formats using the configured locale but replaces the
-    thousands separator with a space and the decimal separator with ``'.'``
-    so the output is always safe for Digits to render.
-
-    Args:
-        qty: The numeric quantity.
-        commodity: The commodity symbol (e.g. ``'€'``, ``'EUR'``).
-
-    Returns:
-        A Digits-safe string like ``'€1 234.56'`` or ``'0.00'`` if no commodity.
-    """
-    locale = _number_locale()
-    thousands = get_group_symbol(locale)
-    decimal_sep = get_decimal_symbol(locale)
-    formatted = format_decimal(qty, format="#,##0.00", locale=locale)
-    # Use a placeholder to avoid double-replacement when separators overlap
-    result = formatted.replace(decimal_sep, "\x00")
-    result = result.replace(thousands, " ")
-    result = result.replace("\x00", ".")
-    if not commodity:
-        return result
-    if len(commodity) == 1:
-        return f"{commodity}{result}"
-    return f"{result} {commodity}"
 
 
 def compute_saving_rate(income: Decimal, expenses: Decimal) -> float | None:
