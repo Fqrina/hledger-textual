@@ -1,6 +1,6 @@
 [project]
 name = "hledger-textual"
-version = "0.2.0"
+version = "0.2.1"
 description = "A full-featured terminal user interface for hledger plain-text accounting"
 readme = "README.md"
 authors = [
@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE.md"]
 dependencies = [
+    "babel>=2.18.0",
     "fpdf2>=2.8.0",
     "pricehist>=1.4.14",
     "textual>=3.0.0,<4",

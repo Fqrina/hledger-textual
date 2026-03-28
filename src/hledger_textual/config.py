@@ -226,6 +226,30 @@ def load_rules_dir() -> Path | None:
     return None
 
 
+def load_number_locale() -> str:
+    """Return the configured number locale, or ``"en_US"`` if not set or invalid.
+
+    Reads the ``number_locale`` key from config.toml. The value is
+    validated against babel's locale database; any unrecognised locale string
+    falls back silently to ``"en_US"``.
+
+    Example config.toml entry::
+
+        number_locale = "it_IT"
+
+    Returns:
+        A babel-compatible locale string such as ``"en_US"`` or ``"it_IT"``.
+    """
+    config = _load_config_dict()
+    val = config.get("number_locale", "en_US")
+    try:
+        from babel import Locale
+        Locale.parse(str(val))
+        return str(val)
+    except Exception:
+        return "en_US"
+
+
 def load_budget_alert_threshold() -> float | None:
     """Return the configured budget alert threshold percentage, or ``None``.
 

@@ -19,6 +19,7 @@ from hledger_textual.cache import HledgerCache
 from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.formatting import fmt_amount_str
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 
@@ -466,7 +467,7 @@ class TransactionsTable(Widget):
                     Text(txn.status.symbol, style="dim"),
                     Text(txn.description, style="dim"),
                     Text(accounts, style="dim"),
-                    Text(txn.total_amount, style="dim"),
+                    Text(fmt_amount_str(txn.total_amount), style="dim"),
                     key=str(txn.index),
                 )
 
@@ -489,7 +490,7 @@ class TransactionsTable(Widget):
                     txn.status.symbol,
                     txn.description,
                     Text(accounts),
-                    txn.total_amount,
+                    fmt_amount_str(txn.total_amount),
                     key=str(txn.index),
                 )
         else:
@@ -501,7 +502,7 @@ class TransactionsTable(Widget):
                     txn.status.symbol,
                     txn.description,
                     Text(accounts),
-                    txn.total_amount,
+                    fmt_amount_str(txn.total_amount),
                     key=str(txn.index),
                 )
 
