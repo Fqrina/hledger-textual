@@ -439,7 +439,7 @@ class SummaryPane(Widget):
                 (cost_by_account[acc][1] for acc, _ in accs if acc in cost_by_account),
                 "",
             )
-            book_str = fmt_amount(book_total, book_com) if book_com else f"{book_total:,.2f}"
+            book_str = fmt_amount(book_total, book_com) if book_com else fmt_amount(book_total, "")
 
             if eur_by_account is not None and com in tickers:
                 # EUR market value: sum across all accounts for this commodity
@@ -455,7 +455,7 @@ class SummaryPane(Widget):
                 if eur_com == com:
                     ptable.add_row(com, f"{total_qty:g}", book_str, "\u2014")
                     continue
-                eur_str = fmt_amount(eur_total, eur_com) if eur_com else f"{eur_total:,.2f}"
+                eur_str = fmt_amount(eur_total, eur_com) if eur_com else fmt_amount(eur_total, "")
                 # Color: green if market value exceeds book value (gain), red if loss
                 if book_com and eur_total > book_total:
                     eur_str = f"[green]{eur_str}[/green]"

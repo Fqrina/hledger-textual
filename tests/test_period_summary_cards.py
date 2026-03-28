@@ -85,13 +85,13 @@ class TestPeriodSummaryCardsUpdate:
             await pilot.pause()
 
             income = cards.query_one(".income-value", Digits)
-            assert "3000" in income.value
+            assert "3 000" in income.value
 
             expenses = cards.query_one(".expenses-value", Digits)
-            assert "1200" in expenses.value
+            assert "1 200" in expenses.value
 
             net = cards.query_one(".net-value", Digits)
-            assert "1800" in net.value
+            assert "1 800" in net.value
             assert net.has_class("net-positive")
             assert not net.has_class("net-negative")
 
