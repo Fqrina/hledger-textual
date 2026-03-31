@@ -127,6 +127,12 @@ class AccountTransactionsScreen(Screen):
             AccountNoteModal(self.account, current_note), callback=on_result
         )
 
+    def on_transactions_table_journal_changed(
+        self, event: TransactionsTable.JournalChanged
+    ) -> None:
+        """Reload the transactions table after a journal mutation (edit/delete)."""
+        self._table.reload()
+
     def action_refresh(self) -> None:
         """Reload transactions from the journal."""
         self._table.do_refresh()
