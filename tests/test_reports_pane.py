@@ -11,7 +11,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Select
 
 from hledger_textual.models import ReportData, ReportRow
-from hledger_textual.widgets.reports_pane import ReportsPane
+from hledger_textual.widgets.reports_pane import ReportsPane, _format_custom_output
 from tests.conftest import has_hledger
 
 
@@ -395,3 +395,97 @@ class TestReportsPaneInvestments:
             # No extra rows should be added for empty investment data
             assert pane._report_data is not None
             assert len(pane._report_data.rows) == original_row_count
+
+
+# ------------------------------------------------------------------
+# Unit tests for _format_custom_output  (#86)
+# ------------------------------------------------------------------
+
+
+class TestFormatCustomOutput:
+    """Tests for the _format_custom_output helper function."""
+
+    def test_bal_output_preserves_all_data_lines_with_skip_title(self):
+        """bal output has no title; all indented data lines must be kept.
+
+        Regression test for #86: the first data line was incorrectly
+        treated as a title and dropped when skip_title=True.
+        """
+        raw = (
+            "          $-49583.15  Liabilities:Members:Jason\n"
+            "          $-49306.64  Liabilities:Members:Shannon\n"
+        )
+        result = _format_custom_output(raw, skip_title=True)
+        plain = result.plain
+        assert "Jason" in plain
+        assert "Shannon" in plain
+
+    def test_bal_output_preserves_all_data_lines_without_skip_title(self):
+        """bal output lines are preserved when skip_title=False too."""
+        raw = (
+            "          $-49583.15  Liabilities:Members:Jason\n"
+            "          $-49306.64  Liabilities:Members:Shannon\n"
+        )
+        result = _format_custom_output(raw, skip_title=False)
+        plain = result.plain
+        assert "Jason" in plain
+        assert "Shannon" in plain
+
+    def test_compound_report_title_skipped(self):
+        """Compound report title (non-indented) is skipped with skip_title=True."""
+        raw = (
+            "Balance Sheet 2026-03-31\n"
+            "\n"
+            "                  || 2026-03-31\n"
+            "==================||===========\n"
+            " Assets           ||   $5000.00\n"
+        )
+        result = _format_custom_output(raw, skip_title=True)
+        plain = result.plain
+        assert "Balance Sheet" not in plain
+        assert "Assets" in plain
+
+    def test_compound_report_title_kept(self):
+        """Compound report title is rendered bold when skip_title=False."""
+        raw = (
+            "Balance Sheet 2026-03-31\n"
+            "\n"
+            " Assets           ||   $5000.00\n"
+        )
+        result = _format_custom_output(raw, skip_title=False)
+        plain = result.plain
+        assert "Balance Sheet" in plain
+        assert "Assets" in plain
+
+    def test_single_indented_line(self):
+        """A single indented data line is not dropped as a title."""
+        raw = "          $100.00  expenses:food\n"
+        result = _format_custom_output(raw, skip_title=True)
+        assert "expenses:food" in result.plain
+
+    def test_total_separator_styling(self):
+        """Lines after --- separator are treated as totals, not dropped."""
+        raw = (
+            "          $100.00  expenses:food\n"
+            "--------------------\n"
+            "          $100.00\n"
+        )
+        result = _format_custom_output(raw, skip_title=True)
+        plain = result.plain
+        assert "expenses:food" in plain
+        assert "$100.00" in plain
+
+    def test_empty_input(self):
+        """Empty input produces empty output."""
+        result = _format_custom_output("", skip_title=True)
+        assert result.plain == ""
+
+    def test_leading_blank_lines_before_data(self):
+        """Leading blank lines before indented data are handled correctly."""
+        raw = (
+            "\n"
+            "\n"
+            "          $500.00  assets:bank\n"
+        )
+        result = _format_custom_output(raw, skip_title=True)
+        assert "assets:bank" in result.plain
