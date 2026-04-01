@@ -22,22 +22,22 @@ def app_journal(tmp_path: Path) -> Path:
     period filter always shows all three transactions.
     """
     today = date.today()
-    d1 = today.replace(day=1)
-    d2 = today.replace(day=2)
-    d3 = today.replace(day=3)
+    # Use today for all dates so they are always in the past, avoiding the
+    # "Scheduled" separator row that _update_table adds for future dates.
+    d = today.isoformat()
 
     content = (
         "; Test journal for app integration tests\n"
         "\n"
-        f"{d1.isoformat()} * (INV-001) Grocery shopping  ; weekly groceries\n"
+        f"{d} * (INV-001) Grocery shopping  ; weekly groceries\n"
         "    expenses:food:groceries              €40.80\n"
         "    assets:bank:checking\n"
         "\n"
-        f"{d2.isoformat()} Salary\n"
+        f"{d} Salary\n"
         "    assets:bank:checking               €3000.00\n"
         "    income:salary\n"
         "\n"
-        f"{d3.isoformat()} ! Office supplies  ; for home office\n"
+        f"{d} ! Office supplies  ; for home office\n"
         "    expenses:office                      €25.00\n"
         "    expenses:shipping                    €10.00\n"
         "    assets:bank:checking\n"

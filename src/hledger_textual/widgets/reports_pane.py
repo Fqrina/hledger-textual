@@ -58,15 +58,18 @@ def _format_custom_output(raw: str, *, skip_title: bool = False) -> Text:
     - ``||`` and ``++`` replaced with Unicode box-drawing characters (``│`` / ``┼``)
     - Separator lines (``===`` / ``---``) are dimmed
     - Standalone zero values are dimmed
-    - The report title (first non-empty line) is rendered bold, unless
-      ``skip_title`` is ``True`` in which case it is omitted entirely
+    - The report title (first non-empty, non-indented line) is rendered bold,
+      unless ``skip_title`` is ``True`` in which case it is omitted entirely.
+      Lines that start with whitespace are treated as data rows, not titles.
     - Total rows (lines after the ``---`` separator) are rendered bold yellow
 
     Args:
         raw: Raw stdout string from hledger.
-        skip_title: When ``True``, the first non-empty line (the hledger-generated
-            title) is dropped from the output.  Use this when the report name is
-            already displayed in a separate header widget.
+        skip_title: When ``True``, the first non-empty, non-indented line (the
+            hledger-generated title) is dropped from the output.  Use this when
+            the report name is already displayed in a separate header widget.
+            Lines that start with whitespace (data rows from simple commands
+            like ``bal``) are never treated as titles.
 
     Returns:
         A :class:`rich.text.Text` ready for use in a :class:`~textual.widgets.Static`.
@@ -79,16 +82,23 @@ def _format_custom_output(raw: str, *, skip_title: bool = False) -> Text:
     for line in lines:
         display = line.replace('++', '┼').replace('||', '│')
 
-        # Title: first non-empty line
+        # Title: first non-empty line.  Hledger titles (e.g. "Balance
+        # Sheet 2026-03-31") never start with whitespace, whereas data
+        # rows from simple commands like ``bal`` are indented for amount
+        # alignment.  Only treat the line as a title when it starts at
+        # column 0; otherwise fall through to normal data handling.
         if not title_done:
             if display.strip():
                 title_done = True
-                if not skip_title:
-                    result.append(display + "\n", style="bold")
+                if not display[0].isspace():
+                    if not skip_title:
+                        result.append(display + "\n", style="bold")
+                    continue
+                # First non-empty line is indented → data row, fall through
             else:
                 if not skip_title:
                     result.append("\n")
-            continue
+                continue
 
         # Separator lines: only =, -, +, |, and spaces
         if _ONLY_SEPS.match(line):

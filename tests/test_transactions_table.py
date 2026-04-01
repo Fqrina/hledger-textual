@@ -32,14 +32,15 @@ class _TableApp(App):
 def table_journal(tmp_path: Path) -> Path:
     """A minimal journal with current-month transactions."""
     today = date.today()
-    d1 = today.replace(day=1)
-    d2 = today.replace(day=2)
+    # Use today for all dates so they are always in the past, avoiding the
+    # "Scheduled" separator row that _update_table adds for future dates.
+    d = today.isoformat()
     content = (
-        f"{d1.isoformat()} * Grocery shopping\n"
+        f"{d} * Grocery shopping\n"
         "    expenses:food              €40.80\n"
         "    assets:bank:checking\n"
         "\n"
-        f"{d2.isoformat()} Salary\n"
+        f"{d} Salary\n"
         "    assets:bank:checking     €3000.00\n"
         "    income:salary\n"
     )
@@ -60,14 +61,13 @@ def empty_table_journal(tmp_path: Path) -> Path:
 def multi_month_journal(tmp_path: Path) -> Path:
     """A journal with transactions in the current and previous month."""
     today = date.today()
-    cur = today.replace(day=1)
-    prev_month = cur.month - 1
-    prev_year = cur.year
+    prev_month = today.month - 1
+    prev_year = today.year
     if prev_month < 1:
         prev_month, prev_year = 12, prev_year - 1
-    prev = cur.replace(year=prev_year, month=prev_month)
+    prev = today.replace(year=prev_year, month=prev_month, day=1)
     content = (
-        f"{cur.isoformat()} * Current month txn\n"
+        f"{today.isoformat()} * Current month txn\n"
         "    expenses:food              €10.00\n"
         "    assets:bank:checking\n"
         "\n"
