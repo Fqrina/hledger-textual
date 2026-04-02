@@ -763,8 +763,31 @@ class TestLoadAccountBalances:
         assert accounts.count("assets:cash") == 1
 
 
-class TestRunHledgerLayoutOverride:
-    """Tests for the --layout=wide override in run_hledger."""
+class TestRunHledgerOverrides:
+    """Tests for run_hledger command-line overrides."""
+
+    def test_no_conf_always_present(self, monkeypatch):
+        """run_hledger always passes --no-conf to ignore hledger.conf.
+
+        Regression test for #93: hledger.conf with -f caused double counting.
+        """
+        import subprocess
+
+        captured_cmd = []
+        original_run = subprocess.run
+
+        def _capture(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            return original_run(cmd, **kwargs)
+
+        monkeypatch.setattr(subprocess, "run", _capture)
+        from hledger_textual.hledger import run_hledger
+
+        try:
+            run_hledger("print", "-O", "json")
+        except Exception:
+            pass
+        assert "--no-conf" in captured_cmd
 
     def test_balance_command_includes_layout_wide(self, monkeypatch):
         """run_hledger appends --layout=wide to balance commands."""
