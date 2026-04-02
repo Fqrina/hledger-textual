@@ -746,6 +746,66 @@ class TestLoadAccountBalances:
         balances = load_account_balances(journal)
         assert balances == []
 
+    def test_multi_commodity_no_duplicate_accounts(self, tmp_path: Path):
+        """Multi-commodity accounts produce one row, not one per commodity.
+
+        Regression test for #89: with --layout=bare in hledger.conf, the
+        same account appeared multiple times, causing DuplicateKey errors.
+        """
+        journal = tmp_path / "multi.journal"
+        journal.write_text(
+            "2021-07-27 give dollars, get euros\n"
+            "    assets:cash      USD -10.00 @@ EUR 8.50\n"
+            "    assets:cash      EUR   8.50\n"
+        )
+        balances = load_account_balances(journal)
+        accounts = [row[0] for row in balances]
+        assert accounts.count("assets:cash") == 1
+
+
+class TestRunHledgerLayoutOverride:
+    """Tests for the --layout=wide override in run_hledger."""
+
+    def test_balance_command_includes_layout_wide(self, monkeypatch):
+        """run_hledger appends --layout=wide to balance commands."""
+        import subprocess
+
+        captured_cmd = []
+        original_run = subprocess.run
+
+        def _capture(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            return original_run(cmd, **kwargs)
+
+        monkeypatch.setattr(subprocess, "run", _capture)
+        from hledger_textual.hledger import run_hledger
+
+        try:
+            run_hledger("balance", "--flat", "-O", "csv")
+        except Exception:
+            pass
+        assert "--layout=wide" in captured_cmd
+
+    def test_non_balance_command_no_layout_flag(self, monkeypatch):
+        """run_hledger does not add --layout to non-balance commands."""
+        import subprocess
+
+        captured_cmd = []
+        original_run = subprocess.run
+
+        def _capture(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            return original_run(cmd, **kwargs)
+
+        monkeypatch.setattr(subprocess, "run", _capture)
+        from hledger_textual.hledger import run_hledger
+
+        try:
+            run_hledger("print", "-O", "json")
+        except Exception:
+            pass
+        assert "--layout=wide" not in captured_cmd
+
 
 # ------------------------------------------------------------------
 # Tests for load_income_breakdown (require hledger)

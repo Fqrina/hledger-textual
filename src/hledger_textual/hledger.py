@@ -49,6 +49,12 @@ def run_hledger(*args: str, file: str | Path | None = None) -> str:
         cmd.extend(["-f", str(file)])
     cmd.extend(args)
 
+    # Force wide layout for balance commands so that user-level
+    # hledger.conf settings (e.g. --layout=bare) don't break our CSV
+    # parsing, which expects one row per account with combined balances.
+    if args and args[0] == "balance" and "--layout" not in " ".join(args):
+        cmd.append("--layout=wide")
+
     try:
         result = subprocess.run(
             cmd,
