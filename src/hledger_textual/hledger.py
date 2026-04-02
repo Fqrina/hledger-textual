@@ -44,7 +44,7 @@ def run_hledger(*args: str, file: str | Path | None = None) -> str:
     Raises:
         HledgerError: If the command fails or hledger is not found.
     """
-    cmd = ["hledger"]
+    cmd = ["hledger", "--no-conf"]
     if file is not None:
         cmd.extend(["-f", str(file)])
     cmd.extend(args)
