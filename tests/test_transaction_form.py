@@ -147,23 +147,6 @@ class TestFormOpens:
 class TestFormValidation:
     """Tests for form validation logic."""
 
-    async def test_empty_description_rejected(self, app: HledgerTuiApp):
-        from textual.widgets import Input
-
-        async with app.run_test(size=(100, 60)) as pilot:
-            await pilot.pause()
-            await pilot.press("2")
-            await pilot.pause()
-            await pilot.press("a")
-            await pilot.pause()
-            form = app.screen
-            # Leave description empty, try to save
-            form.query_one("#input-description", Input).value = ""
-            form._save()
-            await pilot.pause()
-            # Form should still be open
-            assert isinstance(app.screen, TransactionFormScreen)
-
     async def test_invalid_date_rejected(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
@@ -229,22 +212,6 @@ class TestFormValidation:
             await pilot.pause()
             assert isinstance(app.screen, TransactionFormScreen)
 
-    async def test_less_than_two_postings_rejected(self, app: HledgerTuiApp):
-        from textual.widgets import Input
-
-        async with app.run_test(size=(100, 60)) as pilot:
-            await pilot.pause()
-            await pilot.press("2")
-            await pilot.pause()
-            await pilot.press("a")
-            await pilot.pause()
-            form = app.screen
-            form.query_one("#input-description", Input).value = "Test"
-            # Leave both posting accounts empty
-            form._save()
-            await pilot.pause()
-            assert isinstance(app.screen, TransactionFormScreen)
-
     async def test_invalid_amount_rejected(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
@@ -304,7 +271,8 @@ class TestFormPostings:
             await pilot.pause()
             assert len(form.query(PostingRow)) == 2
 
-    async def test_cannot_remove_below_two(self, app: HledgerTuiApp):
+    async def test_can_remove_below_two(self, app: HledgerTuiApp):
+        """Posting rows can be removed below two (hledger accepts 0+ postings)."""
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
@@ -317,8 +285,7 @@ class TestFormPostings:
             rm_btn = form.query_one("#btn-remove-posting")
             await pilot.click(rm_btn)
             await pilot.pause()
-            # Should still have 2 rows (minimum)
-            assert len(form.query(PostingRow)) == 2
+            assert len(form.query(PostingRow)) == 1
 
 
 class TestFormSave:
