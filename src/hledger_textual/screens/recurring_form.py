@@ -196,11 +196,9 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
         """Remove the last posting row from the form."""
         container = self.query_one("#postings-container", Vertical)
         rows = container.query(PostingRow)
-        if len(rows) > 2:
+        if len(rows) > 0:
             rows.last().remove()
             self.posting_count -= 1
-        else:
-            self.notify("Minimum 2 postings required", severity="warning", timeout=3)
 
     @on(Select.Changed, "#recurring-select-period")
     def on_recurring_select_period_changed(self, event: Select.Changed) -> None:
@@ -319,10 +317,6 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
                 )
             else:
                 postings.append(Posting(account=account, amounts=[]))
-
-        if len(postings) < 2:
-            self.notify("At least 2 postings required", severity="error", timeout=3)
-            return
 
         # Generate or preserve rule_id
         if self.is_edit and self.rule:
