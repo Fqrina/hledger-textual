@@ -436,11 +436,9 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
         """Remove the last posting row from the form."""
         container = self.query_one("#postings-container", Vertical)
         rows = container.query(PostingRow)
-        if len(rows) > 2:
+        if len(rows) > 0:
             rows.last().remove()
             self.posting_count -= 1
-        else:
-            self.notify("Minimum 2 postings required", severity="warning", timeout=3)
 
     @work(thread=True, exclusive=True)
     def _load_commodity_data(self) -> None:
@@ -646,14 +644,6 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 amounts.append(amount)
 
             postings.append(Posting(account=account, amounts=amounts))
-
-        if len(postings) < 2:
-            self.notify(
-                "At least 2 postings with accounts are required",
-                severity="error",
-                timeout=3,
-            )
-            return
 
         postings = self._omit_balancing_amount(postings)
 
