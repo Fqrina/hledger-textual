@@ -471,6 +471,42 @@ class TestParseReportCsv:
         assert data.rows == []
 
 
+class TestLoadReportTreeDepth:
+    """Tests for tree-mode depth detection via real hledger."""
+
+    def test_tree_depth_reflects_account_hierarchy(self, sample_journal_path: Path):
+        """In tree mode, nested accounts have increasing depth."""
+        data = load_report(sample_journal_path, "is", mode="tree")
+        by_account = {r.account: r for r in data.rows}
+
+        # sample.journal has expenses → food → groceries (depth 0 → 1 → 2)
+        assert by_account["expenses"].depth == 0
+        assert by_account["food"].depth == 1
+        assert by_account["groceries"].depth == 2
+
+    def test_tree_depth_account_name_stripped(self, sample_journal_path: Path):
+        """Tree-mode account names no longer carry leading indentation."""
+        data = load_report(sample_journal_path, "is", mode="tree")
+        accounts = [r.account for r in data.rows]
+        assert "groceries" in accounts
+        assert not any(a.startswith(" ") for a in accounts)
+
+    def test_tree_section_headers_and_totals_have_zero_depth(
+        self, sample_journal_path: Path
+    ):
+        """Section headers and totals stay at depth 0 in tree mode."""
+        data = load_report(sample_journal_path, "is", mode="tree")
+        for row in data.rows:
+            if row.is_section_header or row.is_total:
+                assert row.depth == 0
+
+    def test_flat_mode_all_rows_zero_depth(self, sample_journal_path: Path):
+        """In flat mode every row has depth 0."""
+        data = load_report(sample_journal_path, "is", mode="flat")
+        for row in data.rows:
+            assert row.depth == 0
+
+
 class TestLoadReport:
     """Tests for load_report using monkeypatched run_hledger."""
 
@@ -546,6 +582,59 @@ class TestLoadReport:
         journal.write_text("; empty\n")
         with pytest.raises(HledgerError):
             load_report(journal, "bs")
+
+    def test_load_report_default_mode_is_flat(self, monkeypatch, tmp_path: Path):
+        """load_report passes --flat to hledger by default."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_report(journal, "cf")
+        assert "--flat" in captured_args
+        assert "--tree" not in captured_args
+
+    def test_load_report_tree_mode_passes_tree_flag(self, monkeypatch, tmp_path: Path):
+        """load_report passes --tree when mode='tree'."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_report(journal, "cf", mode="tree")
+        assert "--tree" in captured_args
+        assert "--flat" not in captured_args
+
+    def test_load_report_cache_key_distinguishes_modes(self, monkeypatch, tmp_path: Path):
+        """Tree and flat results are cached under distinct keys."""
+        from hledger_textual.cache import HledgerCache
+
+        call_count = 0
+
+        def _capture(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+
+        load_report(journal, "cf", cache=cache, mode="flat")
+        load_report(journal, "cf", cache=cache, mode="flat")
+        assert call_count == 1
+
+        load_report(journal, "cf", cache=cache, mode="tree")
+        assert call_count == 2
 
 
 @pytest.mark.skipif(False, reason="pure function, no hledger needed")
