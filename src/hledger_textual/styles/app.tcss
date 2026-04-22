@@ -6,6 +6,7 @@ Screen {
 
 /* --- App-lpadding-top: 1;evel layout --- */
 
+
 #nav-tabs {
     dock: top;
     margin: 1 0 0 0;
@@ -14,10 +15,13 @@ Screen {
 #nav-tabs Tab {
     padding: 0 2;
     background: $boost;
+    border: none;
 }
 
+/* --- removed blank header --- */
 #nav-tabs Tab.-active {
-    border-bottom: solid $accent;
+    background: $surface;
+    color: $accent;
     text-style: bold;
 }
 
