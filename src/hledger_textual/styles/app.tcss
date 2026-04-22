@@ -13,10 +13,11 @@ Screen {
 
 #nav-tabs Tab {
     padding: 0 2;
+    background: $boost;
 }
 
 #nav-tabs Tab.-active {
-    background: transparent;
+    border-bottom: solid $accent;
     text-style: bold;
 }
 
@@ -171,6 +172,7 @@ PaneToolbar {
     padding: 0 1;
     layout: horizontal;
     align: left middle;
+    background: $panel;
 }
 
 /* Generic filter-bar: show/hide only */
